@@ -4,14 +4,14 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 // 1. Zod 스키마 정의 (유효성 검사 규칙)
+// 은행 정보 필드 제거됨 (v3.1 명세 반영)
 const signupSchema = z.object({
   name: z.string().min(2, '이름은 2글자 이상이어야 합니다.'),
   phone: z.string().regex(/^010-\d{4}-\d{4}$/, '010-0000-0000 형식으로 입력해주세요.'),
+  contactEmail: z.string().email('올바른 이메일 형식을 입력해주세요.'),
   role: z.enum(['ROLE_ADMIN', 'ROLE_INSTRUCTOR'], {
     errorMap: () => ({ message: '역할을 선택해주세요.' }),
   }),
-  bankName: z.string().optional(),
-  accountNumber: z.string().optional(),
 });
 
 // 타입 추론
@@ -24,7 +24,6 @@ const SignupPage = () => {
   const {
     register,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
@@ -32,9 +31,6 @@ const SignupPage = () => {
       role: 'ROLE_INSTRUCTOR', // 기본값: 강사
     },
   });
-
-  // 역할 선택 값 감시 (강사일 때만 은행 정보 보여주기 위해)
-  const selectedRole = watch('role');
 
   // 3. 폼 제출 핸들러
   const onSubmit = async (data: SignupFormData) => {
@@ -100,6 +96,25 @@ const SignupPage = () => {
               </div>
             </div>
 
+            {/* 이메일 (알림용) */}
+            <div>
+              <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700">
+                이메일 (알림 수신용) <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1">
+                <input
+                  id="contactEmail"
+                  type="email"
+                  {...register('contactEmail')}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="example@email.com"
+                />
+                {errors.contactEmail && (
+                  <p className="mt-1 text-sm text-red-600">{errors.contactEmail.message}</p>
+                )}
+              </div>
+            </div>
+
             {/* 역할 선택 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -129,39 +144,6 @@ const SignupPage = () => {
                 <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>
               )}
             </div>
-
-            {/* 은행 정보 (강사 선택 시에만 표시) */}
-            {selectedRole === 'ROLE_INSTRUCTOR' && (
-              <div className="bg-gray-50 p-4 rounded-md space-y-4 border border-gray-200">
-                <h4 className="text-sm font-medium text-gray-900">정산 계좌 정보 (선택)</h4>
-                
-                <div>
-                  <label htmlFor="bankName" className="block text-xs font-medium text-gray-500">
-                    은행명
-                  </label>
-                  <input
-                    id="bankName"
-                    type="text"
-                    {...register('bankName')}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="예: 국민은행"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="accountNumber" className="block text-xs font-medium text-gray-500">
-                    계좌번호
-                  </label>
-                  <input
-                    id="accountNumber"
-                    type="text"
-                    {...register('accountNumber')}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="- 없이 입력"
-                  />
-                </div>
-              </div>
-            )}
 
             {/* 제출 버튼 */}
             <div>
