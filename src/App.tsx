@@ -3,6 +3,7 @@ import MainLayout from './layouts/MainLayout';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import LoginSuccessPage from './pages/LoginSuccessPage';
+import SignupPage from './pages/SignupPage'; // 추가됨
 import LectureListPage from './pages/LectureListPage';
 import LectureCreatePage from './pages/LectureCreatePage';
 
@@ -20,6 +21,7 @@ function App() {
         {/* 레이아웃 없이 보여줄 페이지들 */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login-success" element={<LoginSuccessPage />} />
+        <Route path="/signup" element={<SignupPage />} /> {/* 라우트 추가 */}
       </Routes>
     </BrowserRouter>
   );
