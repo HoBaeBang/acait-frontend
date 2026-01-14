@@ -3,9 +3,14 @@ import MainLayout from './layouts/MainLayout';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import LoginSuccessPage from './pages/LoginSuccessPage';
-import SignupPage from './pages/SignupPage'; // 추가됨
+import RegisterPage from './pages/RegisterPage';
+import PendingPage from './pages/PendingPage';
+import RejectedPage from './pages/RejectedPage';
 import LectureListPage from './pages/LectureListPage';
 import LectureCreatePage from './pages/LectureCreatePage';
+import InstructorPage from './pages/admin/InstructorPage';
+import StudentListPage from './pages/students/StudentListPage'; // 추가됨
+import StudentFormPage from './pages/students/StudentFormPage'; // 추가됨
 
 function App() {
   return (
@@ -14,14 +19,26 @@ function App() {
         {/* MainLayout을 감싸는 라우트 */}
         <Route element={<MainLayout />}>
           <Route path="/" element={<HomePage />} />
+          
+          {/* 강의 관리 */}
           <Route path="/lectures" element={<LectureListPage />} />
           <Route path="/lectures/new" element={<LectureCreatePage />} />
+          
+          {/* 수강생 관리 (추가됨) */}
+          <Route path="/students" element={<StudentListPage />} />
+          <Route path="/students/new" element={<StudentFormPage />} />
+          <Route path="/students/:id/edit" element={<StudentFormPage />} />
+          
+          {/* 관리자 전용 라우트 */}
+          <Route path="/admin/instructors" element={<InstructorPage />} />
         </Route>
 
         {/* 레이아웃 없이 보여줄 페이지들 */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/login-success" element={<LoginSuccessPage />} />
-        <Route path="/signup" element={<SignupPage />} /> {/* 라우트 추가 */}
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/pending" element={<PendingPage />} />
+        <Route path="/rejected" element={<RejectedPage />} />
       </Routes>
     </BrowserRouter>
   );
