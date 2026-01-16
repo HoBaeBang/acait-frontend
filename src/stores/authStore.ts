@@ -2,11 +2,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { jwtDecode } from 'jwt-decode';
 
-// JWT 토큰 페이로드 타입 정의 (v5.0 멀티 테넌시 반영)
+// JWT 토큰 페이로드 타입 정의 (백엔드 실제 응답 반영)
 interface JwtPayload {
   sub: string; // 구글 이메일
-  role: 'ROLE_OWNER' | 'ROLE_INSTRUCTOR' | 'ROLE_SUPER_ADMIN';
-  academyId?: number; // 학원 ID (가입 후 발급됨)
+  auth: 'ROLE_OWNER' | 'ROLE_INSTRUCTOR' | 'ROLE_SUPER_ADMIN' | 'ROLE_ADMIN'; // 백엔드는 'auth' 키 사용
+  academyId?: number; 
   exp: number;
 }
 
@@ -15,7 +15,7 @@ interface AuthState {
   isAuthenticated: boolean;
   user: {
     email: string;
-    role: 'ROLE_OWNER' | 'ROLE_INSTRUCTOR' | 'ROLE_SUPER_ADMIN' | null;
+    role: 'ROLE_OWNER' | 'ROLE_INSTRUCTOR' | 'ROLE_SUPER_ADMIN' | 'ROLE_ADMIN' | null;
     academyId: number | null;
   } | null;
   
@@ -40,7 +40,8 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             user: {
               email: decoded.sub,
-              role: decoded.role,
+              // 백엔드의 'auth' 필드를 프론트엔드의 'role'로 매핑
+              role: decoded.auth,
               academyId: decoded.academyId || null
             }
           });
