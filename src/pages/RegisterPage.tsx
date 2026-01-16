@@ -3,10 +3,11 @@ import { useForm } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { client } from '../api/client';
 import clsx from 'clsx';
+import { signup } from '../api/authApi';
+import { useAuthStore } from '../stores/authStore';
 
-// 공통 스키마 (이름, 전화번호, 이메일)
+// 공통 스키마
 const commonSchema = {
   name: z.string().min(2, '이름은 2글자 이상이어야 합니다.'),
   phone: z.string().regex(/^010-\d{4}-\d{4}$/, '010-0000-0000 형식으로 입력해주세요.'),
@@ -36,18 +37,16 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'OWNER' | 'INSTRUCTOR'>('OWNER');
+  const { setToken } = useAuthStore();
   
   const googleEmail = searchParams.get('googleEmail') || '';
   const googleName = searchParams.get('name') || '';
 
-  // 폼 설정 (탭에 따라 다른 스키마 적용은 복잡하므로, 각각의 폼을 렌더링하거나 하나의 폼에서 분기 처리)
-  // 여기서는 편의상 하나의 폼 상태를 공유하되, 제출 시 검증을 분리합니다.
   const {
     register,
     handleSubmit,
     setValue,
     formState: { errors, isSubmitting },
-    reset,
   } = useForm<OwnerFormData & InstructorFormData>({
     resolver: zodResolver(activeTab === 'OWNER' ? ownerSchema : instructorSchema),
     defaultValues: {
@@ -57,11 +56,8 @@ const RegisterPage = () => {
     },
   });
 
-  // 탭 변경 시 role 값 업데이트 및 에러 초기화
   useEffect(() => {
     setValue('role', activeTab === 'OWNER' ? 'ROLE_OWNER' : 'ROLE_INSTRUCTOR');
-    // 에러 초기화를 위해 reset을 하되, 입력된 값은 유지하고 싶다면 getValues() 사용 가능
-    // 여기서는 간단히 role만 변경
   }, [activeTab, setValue]);
 
   useEffect(() => {
@@ -71,18 +67,39 @@ const RegisterPage = () => {
 
   const onSubmit = async (data: any) => {
     try {
-      console.log('가입 신청 데이터:', data);
+      console.log('가입 요청 데이터:', data);
       
-      // API 엔드포인트 분기 (학원 생성 vs 일반 가입)
-      // v5.0 명세에 따라 엔드포인트가 다를 수 있음. 일단 /auth/signup으로 통일하고 role로 구분한다고 가정.
-      // 만약 학원 생성 API가 따로 있다면 (/academies) 여기서 분기 처리.
-      
-      await client.post('/auth/signup', data);
+      // 통합 API 호출
+      const response = await signup({
+        googleEmail: data.googleEmail,
+        role: data.role,
+        name: data.name,
+        phone: data.phone,
+        contactEmail: data.contactEmail,
+        academyName: activeTab === 'OWNER' ? data.academyName : undefined,
+        inviteCode: activeTab === 'INSTRUCTOR' ? data.inviteCode : undefined,
+      });
 
-      navigate('/pending');
-    } catch (error) {
-      console.error('가입 신청 실패:', error);
-      alert('가입 신청 중 오류가 발생했습니다. 다시 시도해주세요.');
+      if (activeTab === 'OWNER') {
+        // 원장: 가입 즉시 토큰 발급 -> 로그인 처리
+        if (response.accessToken) {
+          setToken(response.accessToken);
+          alert('학원이 생성되었습니다! 환영합니다.');
+          navigate('/', { replace: true });
+        } else {
+          // 토큰이 안 오면 뭔가 이상함 (일단 로그인 페이지로)
+          alert('가입이 완료되었습니다. 로그인해주세요.');
+          navigate('/login');
+        }
+      } else {
+        // 강사: 승인 대기
+        navigate('/pending');
+      }
+
+    } catch (error: any) {
+      console.error('요청 실패:', error);
+      const message = error.response?.data?.message || '처리 중 오류가 발생했습니다.';
+      alert(message);
     }
   };
 
@@ -103,6 +120,7 @@ const RegisterPage = () => {
           {/* 탭 메뉴 */}
           <div className="flex border-b border-gray-200 mb-6">
             <button
+              type="button"
               className={clsx(
                 "flex-1 py-2 text-sm font-medium text-center border-b-2 transition-colors",
                 activeTab === 'OWNER' 
@@ -114,6 +132,7 @@ const RegisterPage = () => {
               새 학원 만들기 (원장)
             </button>
             <button
+              type="button"
               className={clsx(
                 "flex-1 py-2 text-sm font-medium text-center border-b-2 transition-colors",
                 activeTab === 'INSTRUCTOR' 
