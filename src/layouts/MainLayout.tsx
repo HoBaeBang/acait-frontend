@@ -5,6 +5,16 @@ import { useAuthStore } from '../stores/authStore';
 const MainLayout = () => {
   const { user, logout } = useAuthStore();
 
+  // 역할 표시 헬퍼 함수
+  const getRoleLabel = (role: string | null) => {
+    switch (role) {
+      case 'ROLE_OWNER': return '원장';
+      case 'ROLE_INSTRUCTOR': return '강사';
+      case 'ROLE_SUPER_ADMIN': return '관리자';
+      default: return '사용자';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 상단 네비게이션 바 */}
@@ -38,8 +48,8 @@ const MainLayout = () => {
                   수강생 관리
                 </Link>
                 
-                {/* 원장님(ADMIN)에게만 보이는 메뉴 */}
-                {user?.role === 'ROLE_ADMIN' && (
+                {/* 원장님(OWNER)에게만 보이는 메뉴 */}
+                {user?.role === 'ROLE_OWNER' && (
                   <Link
                     to="/admin/instructors"
                     className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
@@ -53,7 +63,7 @@ const MainLayout = () => {
               {user ? (
                 <>
                   <span className="text-sm text-gray-700">
-                    {user.email} ({user.role === 'ROLE_ADMIN' ? '원장' : '강사'})
+                    {user.email} ({getRoleLabel(user.role)})
                   </span>
                   <button
                     onClick={logout}

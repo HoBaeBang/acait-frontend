@@ -1,26 +1,30 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getInstructors, approveInstructor, Instructor } from '../../api/adminApi';
+import { getInstructors, approveInstructor } from '../../api/adminApi';
 import clsx from 'clsx';
+import PlanLimitModal from '../../components/PlanLimitModal';
 
 const InstructorPage = () => {
   const queryClient = useQueryClient();
+  const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
 
-  // 강사 목록 조회 쿼리
   const { data: instructors, isLoading, isError } = useQuery({
     queryKey: ['instructors'],
     queryFn: getInstructors,
   });
 
-  // 승인 처리 뮤테이션
   const approveMutation = useMutation({
     mutationFn: approveInstructor,
     onSuccess: () => {
-      // 성공 시 목록 새로고침
       queryClient.invalidateQueries({ queryKey: ['instructors'] });
       alert('승인 처리되었습니다.');
     },
-    onError: () => {
-      alert('승인 처리에 실패했습니다.');
+    onError: (error: any) => {
+      if (error.response?.status === 403 && error.response?.data?.code === 'PLAN_LIMIT') {
+        setIsLimitModalOpen(true);
+      } else {
+        alert('승인 처리에 실패했습니다.');
+      }
     },
   });
 
@@ -30,12 +34,26 @@ const InstructorPage = () => {
     }
   };
 
+  // 역할 표시 헬퍼 함수
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'ROLE_OWNER': return '원장';
+      case 'ROLE_INSTRUCTOR': return '강사';
+      default: return role;
+    }
+  };
+
   if (isLoading) return <div className="p-8 text-center">로딩 중...</div>;
   if (isError) return <div className="p-8 text-center text-red-500">데이터를 불러오는데 실패했습니다.</div>;
 
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-6 text-gray-800">강사 관리 (승인)</h1>
+
+      <PlanLimitModal 
+        isOpen={isLimitModalOpen} 
+        onClose={() => setIsLimitModalOpen(false)} 
+      />
 
       <div className="bg-white shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
@@ -54,7 +72,7 @@ const InstructorPage = () => {
               <tr key={instructor.memberId}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{instructor.name}</div>
-                  <div className="text-xs text-gray-500">{instructor.role === 'ROLE_ADMIN' ? '원장' : '강사'}</div>
+                  <div className="text-xs text-gray-500">{getRoleLabel(instructor.role)}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {instructor.phone}
