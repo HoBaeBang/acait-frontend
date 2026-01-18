@@ -53,6 +53,7 @@ const RegisterPage = () => {
       role: 'ROLE_OWNER',
       googleEmail: googleEmail,
       name: googleName,
+      contactEmail: googleEmail, // 알림용 이메일 기본값 설정
     },
   });
 
@@ -61,15 +62,31 @@ const RegisterPage = () => {
   }, [activeTab, setValue]);
 
   useEffect(() => {
-    if (googleEmail) setValue('googleEmail', googleEmail);
+    if (googleEmail) {
+      setValue('googleEmail', googleEmail);
+      setValue('contactEmail', googleEmail); // URL 파라미터 로드 시에도 설정
+    }
     if (googleName) setValue('name', googleName);
   }, [googleEmail, googleName, setValue]);
+
+  // 전화번호 자동 포맷팅 핸들러
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+    let formattedValue = rawValue;
+
+    if (rawValue.length > 3 && rawValue.length <= 7) {
+      formattedValue = `${rawValue.slice(0, 3)}-${rawValue.slice(3)}`;
+    } else if (rawValue.length > 7) {
+      formattedValue = `${rawValue.slice(0, 3)}-${rawValue.slice(3, 7)}-${rawValue.slice(7, 11)}`;
+    }
+
+    setValue('phone', formattedValue, { shouldValidate: true });
+  };
 
   const onSubmit = async (data: any) => {
     try {
       console.log('가입 요청 데이터:', data);
       
-      // 통합 API 호출
       const response = await signup({
         googleEmail: data.googleEmail,
         role: data.role,
@@ -81,18 +98,15 @@ const RegisterPage = () => {
       });
 
       if (activeTab === 'OWNER') {
-        // 원장: 가입 즉시 토큰 발급 -> 로그인 처리
         if (response.accessToken) {
           setToken(response.accessToken);
           alert('학원이 생성되었습니다! 환영합니다.');
           navigate('/', { replace: true });
         } else {
-          // 토큰이 안 오면 뭔가 이상함 (일단 로그인 페이지로)
           alert('가입이 완료되었습니다. 로그인해주세요.');
           navigate('/login');
         }
       } else {
-        // 강사: 승인 대기
         navigate('/pending');
       }
 
@@ -117,7 +131,6 @@ const RegisterPage = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           
-          {/* 탭 메뉴 */}
           <div className="flex border-b border-gray-200 mb-6">
             <button
               type="button"
@@ -147,7 +160,6 @@ const RegisterPage = () => {
 
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             
-            {/* 공통: 구글 이메일 */}
             <div>
               <label className="block text-sm font-medium text-gray-700">구글 계정</label>
               <div className="mt-1">
@@ -161,7 +173,6 @@ const RegisterPage = () => {
               </div>
             </div>
 
-            {/* 공통: 이름 */}
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                 이름 <span className="text-red-500">*</span>
@@ -175,7 +186,6 @@ const RegisterPage = () => {
               {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
             </div>
 
-            {/* 공통: 전화번호 */}
             <div>
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
                 휴대전화 <span className="text-red-500">*</span>
@@ -184,13 +194,14 @@ const RegisterPage = () => {
                 id="phone"
                 type="text"
                 {...register('phone')}
+                onChange={handlePhoneChange} // 커스텀 핸들러 연결
                 className="mt-1 appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="010-1234-5678"
+                maxLength={13}
               />
               {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone.message}</p>}
             </div>
 
-            {/* 공통: 이메일 */}
             <div>
               <label htmlFor="contactEmail" className="block text-sm font-medium text-gray-700">
                 이메일 (알림용) <span className="text-red-500">*</span>
@@ -204,9 +215,7 @@ const RegisterPage = () => {
               {errors.contactEmail && <p className="mt-1 text-sm text-red-600">{errors.contactEmail.message}</p>}
             </div>
 
-            {/* 탭별 전용 필드 */}
             {activeTab === 'OWNER' ? (
-              // 원장님: 학원명 입력
               <div>
                 <label htmlFor="academyName" className="block text-sm font-medium text-gray-700">
                   학원명 <span className="text-red-500">*</span>
@@ -221,7 +230,6 @@ const RegisterPage = () => {
                 {errors.academyName && <p className="mt-1 text-sm text-red-600">{errors.academyName.message}</p>}
               </div>
             ) : (
-              // 강사님: 초대 코드 입력
               <div>
                 <label htmlFor="inviteCode" className="block text-sm font-medium text-gray-700">
                   초대 코드 <span className="text-red-500">*</span>
@@ -237,7 +245,6 @@ const RegisterPage = () => {
               </div>
             )}
 
-            {/* 제출 버튼 */}
             <div>
               <button
                 type="submit"
