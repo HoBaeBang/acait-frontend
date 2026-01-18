@@ -1,28 +1,28 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import { getLectureEvents } from '../api/lectureApi';
+import interactionPlugin, { EventDropArg, EventClickArg, DateClickArg } from '@fullcalendar/interaction';
+import { getLectureEvents, updateSchedule, UpdateScheduleRequest, LectureEvent } from '../api/lectureApi';
 import { useAuthStore } from '../stores/authStore';
 import { Link } from 'react-router-dom';
-import logo from '../assets/acait_logo.png'; // 로고 이미지 import
+import logo from '../assets/acait_logo.png';
+import ScheduleEditModal from '../components/ScheduleEditModal';
+import LectureRecordModal from '../components/LectureRecordModal';
+import MakeupScheduleModal from '../components/MakeupScheduleModal';
+import GroupDetailModal from '../components/GroupDetailModal'; // 추가됨
+import { useGroupedEvents } from '../hooks/useGroupedEvents';
 
 const HomePage = () => {
   const { isAuthenticated } = useAuthStore();
 
-  // 1. 비로그인 상태: 랜딩 페이지 표시
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col min-h-[calc(100vh-4rem)]">
-        {/* Hero Section */}
         <section className="flex-1 flex flex-col items-center justify-center text-center px-4 py-20 bg-gradient-to-b from-blue-50 to-white">
           <div className="max-w-4xl mx-auto">
-            <img 
-              src={logo} 
-              alt="ACAIT Logo" 
-              className="h-32 mx-auto mb-8 drop-shadow-md" 
-            />
+            <img src={logo} alt="ACAIT Logo" className="h-32 mx-auto mb-8 drop-shadow-md" />
             <h1 className="text-5xl font-extrabold text-gray-900 mb-6 tracking-tight">
               학원 관리를 <span className="text-blue-600">더 스마트하게</span>
             </h1>
@@ -38,60 +38,214 @@ const HomePage = () => {
             </Link>
           </div>
         </section>
-
-        {/* Features Section */}
-        <section className="py-20 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-              {/* Feature 1 */}
-              <div className="text-center p-6 rounded-2xl hover:bg-gray-50 transition-colors">
-                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl">
-                  📅
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">스마트한 일정 관리</h3>
-                <p className="text-gray-500 leading-relaxed">
-                  직관적인 캘린더 뷰로 강의 스케줄을 한눈에 파악하고 관리할 수 있습니다.
-                </p>
-              </div>
-              {/* Feature 2 */}
-              <div className="text-center p-6 rounded-2xl hover:bg-gray-50 transition-colors">
-                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl">
-                  👥
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">강사 및 학생 관리</h3>
-                <p className="text-gray-500 leading-relaxed">
-                  강사진과 수강생 정보를 체계적으로 관리하여 업무 효율을 높입니다.
-                </p>
-              </div>
-              {/* Feature 3 */}
-              <div className="text-center p-6 rounded-2xl hover:bg-gray-50 transition-colors">
-                <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-3xl">
-                  📊
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">데이터 분석</h3>
-                <p className="text-gray-500 leading-relaxed">
-                  학원 운영 데이터를 시각화하여 더 나은 의사결정을 돕습니다.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
     );
   }
 
-  // 2. 로그인 상태: 캘린더 컴포넌트 표시 (기존 코드 분리)
   return <CalendarView />;
 };
 
-// 캘린더 뷰 컴포넌트 (로그인 시에만 렌더링됨)
 const CalendarView = () => {
+  const queryClient = useQueryClient();
+  
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<{
+    ids: string[];
+    start: Date;
+    end: Date;
+    revert: () => void;
+  } | null>(null);
+
+  const [recordModalData, setRecordModalData] = useState<{
+    isOpen: boolean;
+    lectureId: number;
+    studentId: number;
+    studentName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+  }>({
+    isOpen: false,
+    lectureId: 0,
+    studentId: 0,
+    studentName: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+  });
+
+  const [makeupModalData, setMakeupModalData] = useState<{
+    isOpen: boolean;
+    date: string;
+    startTime: string;
+  }>({
+    isOpen: false,
+    date: '',
+    startTime: '',
+  });
+
+  // 그룹 상세 모달 상태 (추가됨)
+  const [groupDetailData, setGroupDetailData] = useState<{
+    isOpen: boolean;
+    subEvents: LectureEvent[];
+  }>({
+    isOpen: false,
+    subEvents: [],
+  });
+
   const { data: events, isLoading, isError } = useQuery({
     queryKey: ['lectureEvents'],
     queryFn: getLectureEvents,
-    // 로그인 상태일 때만 쿼리 실행 (enabled 옵션은 상위에서 처리했으므로 생략 가능하지만 안전장치로 둠)
     enabled: true, 
   });
+
+  const groupedEvents = useGroupedEvents(events);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { ids: string[]; req: UpdateScheduleRequest }) => {
+      await Promise.all(data.ids.map(id => updateSchedule(id, data.req)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['lectureEvents'] });
+      alert('일정이 수정되었습니다.');
+      setIsEditModalOpen(false);
+      setPendingUpdate(null);
+    },
+    onError: () => {
+      alert('일정 수정에 실패했습니다.');
+      pendingUpdate?.revert();
+      setIsEditModalOpen(false);
+      setPendingUpdate(null);
+    },
+  });
+
+  const handleEventDrop = (info: EventDropArg) => {
+    const { event, revert } = info;
+    const extendedProps = event.extendedProps as any;
+    
+    let targetIds: string[] = [];
+    if (extendedProps.subEvents && extendedProps.subEvents.length > 0) {
+      targetIds = extendedProps.subEvents.map((e: any) => e.id);
+    } else {
+      targetIds = [event.id];
+    }
+
+    setPendingUpdate({
+      ids: targetIds,
+      start: event.start!,
+      end: event.end!,
+      revert,
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleConfirmUpdate = (scope: 'INSTANCE' | 'SERIES') => {
+    if (!pendingUpdate) return;
+    const formatTime = (date: Date) => date.toTimeString().slice(0, 5);
+    const formatDate = (date: Date) => date.toISOString().slice(0, 10);
+
+    const requestData: UpdateScheduleRequest = {
+      startTime: formatTime(pendingUpdate.start),
+      endTime: formatTime(pendingUpdate.end),
+      targetDate: formatDate(pendingUpdate.start),
+      scope,
+    };
+
+    updateMutation.mutate({ ids: pendingUpdate.ids, req: requestData });
+  };
+
+  const handleCloseModal = () => {
+    pendingUpdate?.revert();
+    setIsEditModalOpen(false);
+    setPendingUpdate(null);
+  };
+
+  const handleEventClick = (info: EventClickArg) => {
+    const event = info.event;
+    const extendedProps = event.extendedProps as any;
+
+    // 그룹 이벤트 클릭 시 상세 모달 띄우기
+    if (extendedProps.subEvents && extendedProps.subEvents.length > 0) {
+      setGroupDetailData({
+        isOpen: true,
+        subEvents: extendedProps.subEvents,
+      });
+      return;
+    }
+
+    // 단일 이벤트 클릭 시 기록 모달 띄우기
+    if (event.start! > new Date()) {
+      alert('미래의 수업은 기록할 수 없습니다.');
+      return;
+    }
+    setRecordModalData({
+      isOpen: true,
+      lectureId: parseInt(event.id),
+      studentId: 1, 
+      studentName: '홍길동',
+      date: event.start!.toISOString().slice(0, 10),
+      startTime: event.start!.toTimeString().slice(0, 5),
+      endTime: event.end!.toTimeString().slice(0, 5),
+    });
+  };
+
+  // 그룹 상세 모달에서 [수정] 버튼 클릭 시
+  const handleGroupItemEdit = (event: LectureEvent) => {
+    // TODO: 개별 수정 로직 구현 (예: 시간 수정 모달 띄우기)
+    // 현재는 간단히 alert로 대체하거나, 기존 ScheduleEditModal을 재활용할 수 있음
+    // 여기서는 간단히 "이 일정만 변경" 모달을 띄우는 로직으로 연결
+    // 단, 드래그가 아니므로 start/end 정보가 없음 -> 별도 시간 입력 모달 필요
+    alert(`'${event.title}' 개별 수정 기능은 준비 중입니다.\n(시간표 관리 페이지에서 수정해주세요)`);
+    setGroupDetailData(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleDateClick = (info: DateClickArg) => {
+    setMakeupModalData({
+      isOpen: true,
+      date: info.dateStr.slice(0, 10),
+      startTime: info.date.toTimeString().slice(0, 5),
+    });
+  };
+
+  const renderEventContent = (eventInfo: any) => {
+    const { event } = eventInfo;
+    const extendedProps = event.extendedProps as any;
+    const formatTime = (dateStr: string) => {
+      const date = new Date(dateStr);
+      return date.toTimeString().slice(0, 5);
+    };
+
+    if (extendedProps.subEvents && extendedProps.subEvents.length > 0) {
+      const groupStart = formatTime(event.startStr);
+      const groupEnd = formatTime(event.endStr);
+
+      return (
+        <div className="p-1 h-full overflow-hidden flex flex-col">
+          <div className="font-bold text-xs mb-1 bg-white/20 rounded px-1 flex justify-between items-center">
+            <span>{extendedProps.subEvents.length}개 통합</span>
+            <span className="text-[10px] opacity-90">{groupStart}~{groupEnd}</span>
+          </div>
+          <ul className="text-xs space-y-1 overflow-y-auto flex-1">
+            {extendedProps.subEvents.map((sub: any) => (
+              <li key={sub.id} className="flex flex-col border-b border-white/10 pb-1 last:border-0">
+                <span className="text-[10px] opacity-80">
+                  [{formatTime(sub.start)}~{formatTime(sub.end)}]
+                </span>
+                <span className="truncate font-medium">{sub.title}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-1">
+        <div className="font-semibold text-xs truncate">{event.title}</div>
+        <div className="text-xs opacity-80">{event.extendedProps?.instructor}</div>
+      </div>
+    );
+  };
 
   if (isLoading) {
     return (
@@ -124,23 +278,59 @@ const CalendarView = () => {
         </Link>
       </div>
       
+      <ScheduleEditModal 
+        isOpen={isEditModalOpen}
+        onClose={handleCloseModal}
+        onConfirm={handleConfirmUpdate}
+      />
+
+      <LectureRecordModal
+        isOpen={recordModalData.isOpen}
+        onClose={() => setRecordModalData(prev => ({ ...prev, isOpen: false }))}
+        lectureId={recordModalData.lectureId}
+        studentId={recordModalData.studentId}
+        studentName={recordModalData.studentName}
+        date={recordModalData.date}
+        startTime={recordModalData.startTime}
+        endTime={recordModalData.endTime}
+      />
+
+      <MakeupScheduleModal
+        isOpen={makeupModalData.isOpen}
+        onClose={() => setMakeupModalData(prev => ({ ...prev, isOpen: false }))}
+        date={makeupModalData.date}
+        startTime={makeupModalData.startTime}
+      />
+
+      {/* 그룹 상세 모달 (추가됨) */}
+      <GroupDetailModal
+        isOpen={groupDetailData.isOpen}
+        onClose={() => setGroupDetailData(prev => ({ ...prev, isOpen: false }))}
+        subEvents={groupDetailData.subEvents}
+        onEdit={handleGroupItemEdit}
+      />
+
       <div className="calendar-container">
         <FullCalendar
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-          initialView="dayGridMonth"
+          initialView="timeGridWeek"
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
           }}
           locale="ko"
-          events={events}
-          eventClick={(info) => {
-            alert(`강의: ${info.event.title}\n시간: ${info.event.start?.toLocaleString()} ~ ${info.event.end?.toLocaleString()}`);
-          }}
+          events={groupedEvents}
+          eventContent={renderEventContent}
+          editable={true}
+          eventDrop={handleEventDrop}
+          eventClick={handleEventClick}
+          dateClick={handleDateClick}
           height="auto"
           contentHeight="70vh"
-          eventColor="#3B82F6" // 기본 이벤트 색상 (Blue-500)
+          eventColor="#3B82F6"
+          slotMinTime="09:00:00"
+          slotMaxTime="22:00:00"
         />
       </div>
     </div>
