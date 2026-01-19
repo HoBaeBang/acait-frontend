@@ -47,6 +47,12 @@ const MainLayout = () => {
                 >
                   수강생 관리
                 </Link>
+                <Link
+                  to="/settlements"
+                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                >
+                  정산 관리
+                </Link>
                 
                 {/* 원장님(OWNER)에게만 보이는 메뉴 */}
                 {user?.role === 'ROLE_OWNER' && (

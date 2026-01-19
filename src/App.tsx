@@ -9,8 +9,9 @@ import RejectedPage from './pages/RejectedPage';
 import LectureListPage from './pages/LectureListPage';
 import LectureCreatePage from './pages/LectureCreatePage';
 import InstructorPage from './pages/admin/InstructorPage';
-import StudentListPage from './pages/students/StudentListPage'; // 추가됨
-import StudentFormPage from './pages/students/StudentFormPage'; // 추가됨
+import StudentListPage from './pages/students/StudentListPage';
+import StudentFormPage from './pages/students/StudentFormPage';
+import SettlementPage from './pages/SettlementPage'; // 추가됨
 
 function App() {
   return (
@@ -24,10 +25,13 @@ function App() {
           <Route path="/lectures" element={<LectureListPage />} />
           <Route path="/lectures/new" element={<LectureCreatePage />} />
           
-          {/* 수강생 관리 (추가됨) */}
+          {/* 수강생 관리 */}
           <Route path="/students" element={<StudentListPage />} />
           <Route path="/students/new" element={<StudentFormPage />} />
           <Route path="/students/:id/edit" element={<StudentFormPage />} />
+          
+          {/* 정산 관리 (추가됨) */}
+          <Route path="/settlements" element={<SettlementPage />} />
           
           {/* 관리자 전용 라우트 */}
           <Route path="/admin/instructors" element={<InstructorPage />} />
