@@ -11,7 +11,8 @@ import LectureCreatePage from './pages/LectureCreatePage';
 import InstructorPage from './pages/admin/InstructorPage';
 import StudentListPage from './pages/students/StudentListPage';
 import StudentFormPage from './pages/students/StudentFormPage';
-import SettlementPage from './pages/SettlementPage'; // 추가됨
+import SettlementPage from './pages/SettlementPage';
+import MaterialPage from './pages/MaterialPage'; // 추가됨
 
 function App() {
   return (
@@ -30,7 +31,10 @@ function App() {
           <Route path="/students/new" element={<StudentFormPage />} />
           <Route path="/students/:id/edit" element={<StudentFormPage />} />
           
-          {/* 정산 관리 (추가됨) */}
+          {/* 교재 관리 (추가됨) */}
+          <Route path="/materials" element={<MaterialPage />} />
+
+          {/* 정산 관리 */}
           <Route path="/settlements" element={<SettlementPage />} />
           
           {/* 관리자 전용 라우트 */}
