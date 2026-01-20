@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useRef } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -11,7 +11,7 @@ import logo from '../assets/acait_logo.png';
 import ScheduleEditModal from '../components/ScheduleEditModal';
 import LectureRecordModal from '../components/LectureRecordModal';
 import MakeupScheduleModal from '../components/MakeupScheduleModal';
-import GroupDetailModal from '../components/GroupDetailModal'; // 추가됨
+import GroupDetailModal from '../components/GroupDetailModal';
 import { useGroupedEvents } from '../hooks/useGroupedEvents';
 
 const HomePage = () => {
@@ -47,7 +47,15 @@ const HomePage = () => {
 
 const CalendarView = () => {
   const queryClient = useQueryClient();
+  const calendarRef = useRef<FullCalendar>(null);
   
+  // 로컬 상태로 이벤트 관리 (FullCalendar의 events 함수 방식 사용 시 useQuery 대신 직접 관리 필요할 수도 있음)
+  // 하지만 useGroupedEvents 훅을 사용하려면 데이터를 먼저 받아와야 함.
+  // 여기서는 FullCalendar의 datesSet 이벤트를 활용하여 날짜 변경 시 데이터를 다시 fetch하는 방식을 사용.
+  
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [rawEvents, setRawEvents] = useState<LectureEvent[]>([]);
+
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<{
     ids: string[];
@@ -84,7 +92,6 @@ const CalendarView = () => {
     startTime: '',
   });
 
-  // 그룹 상세 모달 상태 (추가됨)
   const [groupDetailData, setGroupDetailData] = useState<{
     isOpen: boolean;
     subEvents: LectureEvent[];
@@ -93,13 +100,18 @@ const CalendarView = () => {
     subEvents: [],
   });
 
-  const { data: events, isLoading, isError } = useQuery({
-    queryKey: ['lectureEvents'],
-    queryFn: getLectureEvents,
-    enabled: true, 
+  // 날짜 범위가 변경될 때마다 데이터 fetch
+  // useQuery를 사용하여 캐싱 및 리페칭 관리
+  const { isLoading } = useQuery({ // data는 직접 사용하지 않고 onSuccess 등에서 처리하거나, groupedEvents에 전달
+    queryKey: ['lectureEvents', dateRange.start, dateRange.end],
+    queryFn: () => getLectureEvents(dateRange.start, dateRange.end),
+    enabled: !!dateRange.start && !!dateRange.end,
+    onSuccess: (data) => {
+      setRawEvents(data);
+    }
   });
 
-  const groupedEvents = useGroupedEvents(events);
+  const groupedEvents = useGroupedEvents(rawEvents);
 
   const updateMutation = useMutation({
     mutationFn: async (data: { ids: string[]; req: UpdateScheduleRequest }) => {
@@ -118,6 +130,17 @@ const CalendarView = () => {
       setPendingUpdate(null);
     },
   });
+
+  // FullCalendar가 날짜 범위를 알려줄 때 호출됨
+  const handleDatesSet = (arg: any) => {
+    // ISO 문자열로 변환 (YYYY-MM-DD)
+    const startStr = arg.startStr.split('T')[0];
+    const endStr = arg.endStr.split('T')[0];
+    
+    if (startStr !== dateRange.start || endStr !== dateRange.end) {
+      setDateRange({ start: startStr, end: endStr });
+    }
+  };
 
   const handleEventDrop = (info: EventDropArg) => {
     const { event, revert } = info;
@@ -164,7 +187,6 @@ const CalendarView = () => {
     const event = info.event;
     const extendedProps = event.extendedProps as any;
 
-    // 그룹 이벤트 클릭 시 상세 모달 띄우기
     if (extendedProps.subEvents && extendedProps.subEvents.length > 0) {
       setGroupDetailData({
         isOpen: true,
@@ -173,7 +195,6 @@ const CalendarView = () => {
       return;
     }
 
-    // 단일 이벤트 클릭 시 기록 모달 띄우기
     if (event.start! > new Date()) {
       alert('미래의 수업은 기록할 수 없습니다.');
       return;
@@ -189,13 +210,8 @@ const CalendarView = () => {
     });
   };
 
-  // 그룹 상세 모달에서 [수정] 버튼 클릭 시
   const handleGroupItemEdit = (event: LectureEvent) => {
-    // TODO: 개별 수정 로직 구현 (예: 시간 수정 모달 띄우기)
-    // 현재는 간단히 alert로 대체하거나, 기존 ScheduleEditModal을 재활용할 수 있음
-    // 여기서는 간단히 "이 일정만 변경" 모달을 띄우는 로직으로 연결
-    // 단, 드래그가 아니므로 start/end 정보가 없음 -> 별도 시간 입력 모달 필요
-    alert(`'${event.title}' 개별 수정 기능은 준비 중입니다.\n(시간표 관리 페이지에서 수정해주세요)`);
+    alert(`'${event.title}' 개별 수정 기능은 준비 중입니다.`);
     setGroupDetailData(prev => ({ ...prev, isOpen: false }));
   };
 
@@ -247,23 +263,6 @@ const CalendarView = () => {
     );
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="text-center text-red-500 p-8 bg-red-50 rounded-lg border border-red-100 m-4">
-        <p className="font-bold">일정을 불러오는 중 오류가 발생했습니다.</p>
-        <p className="text-sm mt-2">잠시 후 다시 시도해주세요.</p>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-100 m-4">
       <div className="flex justify-between items-center mb-6">
@@ -302,7 +301,6 @@ const CalendarView = () => {
         startTime={makeupModalData.startTime}
       />
 
-      {/* 그룹 상세 모달 (추가됨) */}
       <GroupDetailModal
         isOpen={groupDetailData.isOpen}
         onClose={() => setGroupDetailData(prev => ({ ...prev, isOpen: false }))}
@@ -310,8 +308,14 @@ const CalendarView = () => {
         onEdit={handleGroupItemEdit}
       />
 
-      <div className="calendar-container">
+      <div className="calendar-container relative">
+        {isLoading && (
+          <div className="absolute inset-0 z-10 bg-white/50 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        )}
         <FullCalendar
+          ref={calendarRef}
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
           initialView="timeGridWeek"
           headerToolbar={{
@@ -320,7 +324,8 @@ const CalendarView = () => {
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
           }}
           locale="ko"
-          events={groupedEvents}
+          events={groupedEvents} // 그룹화된 이벤트 전달
+          datesSet={handleDatesSet} // 날짜 변경 감지 -> 데이터 리페칭
           eventContent={renderEventContent}
           editable={true}
           eventDrop={handleEventDrop}

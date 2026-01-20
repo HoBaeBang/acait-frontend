@@ -13,19 +13,19 @@ export interface Lecture {
 
 // 시간표 요청 데이터
 export interface ScheduleRequest {
-  dayOfWeek: string; // "MONDAY", "TUESDAY", ...
-  startTime: string; // "HH:mm:ss"
-  endTime: string;   // "HH:mm:ss"
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
 }
 
-// 강의 생성 요청 데이터 (시간표 포함)
+// 강의 생성 요청 데이터
 export interface CreateLectureRequest {
   name: string;
   type: 'BOARD' | 'INDIV';
   defaultPrice: number;
   defaultDuration: number;
   instructorId?: number;
-  schedules: ScheduleRequest[]; // 추가됨
+  schedules: ScheduleRequest[];
 }
 
 // FullCalendar 이벤트
@@ -57,14 +57,17 @@ export const getLectures = async (): Promise<Lecture[]> => {
   return response.data;
 };
 
-// 강의 생성 (시간표 포함)
+// 강의 생성
 export const createLecture = async (data: CreateLectureRequest): Promise<void> => {
   await client.post('/lecture', data);
 };
 
-// 캘린더용 이벤트 조회
-export const getLectureEvents = async (): Promise<LectureEvent[]> => {
-  const response = await client.get<LectureEvent[]>('/lecture/events');
+// 캘린더용 이벤트 조회 (기간 파라미터 추가)
+export const getLectureEvents = async (start: string, end: string): Promise<LectureEvent[]> => {
+  // 백엔드 API: GET /api/v1/lecture/events?start=2026-01-01&end=2026-02-01
+  const response = await client.get<LectureEvent[]>('/lecture/events', {
+    params: { start, end }
+  });
   return response.data;
 };
 
