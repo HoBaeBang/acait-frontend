@@ -1,17 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createStudent, updateStudent, getStudent, StudentRequest } from '../../api/studentApi';
+import { getStudentLectures, enrollStudent, removeStudent } from '../../api/enrollmentApi';
 import { GRADE_OPTIONS } from '../../constants/grade';
+import LectureSelectModal from '../../components/LectureSelectModal';
 
 // 유효성 검사 스키마
 const studentSchema = z.object({
   name: z.string().min(2, '이름은 2글자 이상이어야 합니다.'),
   school: z.string().optional(),
-  grade: z.string().min(1, '학년을 선택해주세요.'), // 필수 선택
+  grade: z.string().min(1, '학년을 선택해주세요.'),
   birthDate: z.string().length(4, '생일은 4자리여야 합니다. (예: 0101)').optional().or(z.literal('')),
   parentPhone: z.string().regex(/^010-\d{4}-\d{4}$/, '010-0000-0000 형식으로 입력해주세요.'),
   parentEmail: z.string().email('올바른 이메일 형식을 입력해주세요.').optional().or(z.literal('')),
@@ -26,7 +28,9 @@ const StudentFormPage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = !!id;
+  const studentId = Number(id);
   const queryClient = useQueryClient();
+  const [isLectureModalOpen, setIsLectureModalOpen] = useState(false);
 
   const {
     register,
@@ -37,17 +41,24 @@ const StudentFormPage = () => {
   } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
-      grade: 'N', // 기본값: 기타
+      grade: 'N',
       status: 'ATTENDING',
     },
   });
 
-  // 상태값 감시 (퇴원일 입력창 표시용)
   const status = watch('status');
 
+  // 학생 상세 정보 조회
   const { data: studentData } = useQuery({
     queryKey: ['student', id],
     queryFn: () => getStudent(id!),
+    enabled: isEditMode,
+  });
+
+  // 수강 중인 강의 목록 조회 (수정 모드일 때만)
+  const { data: enrolledLectures } = useQuery({
+    queryKey: ['studentLectures', studentId],
+    queryFn: () => getStudentLectures(studentId),
     enabled: isEditMode,
   });
 
@@ -70,8 +81,43 @@ const StudentFormPage = () => {
     },
   });
 
+  // 수강 신청 뮤테이션
+  const enrollMutation = useMutation({
+    mutationFn: (lectureId: number) => enrollStudent(lectureId, studentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['studentLectures', studentId] });
+      alert('강의가 추가되었습니다.');
+      setIsLectureModalOpen(false);
+    },
+    onError: () => {
+      alert('강의 추가에 실패했습니다.');
+    },
+  });
+
+  // 수강 취소 뮤테이션
+  const removeMutation = useMutation({
+    mutationFn: (lectureId: number) => removeStudent(lectureId, studentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['studentLectures', studentId] });
+      alert('수강이 취소되었습니다.');
+    },
+    onError: () => {
+      alert('수강 취소에 실패했습니다.');
+    },
+  });
+
   const onSubmit = (data: StudentFormData) => {
     mutation.mutate(data);
+  };
+
+  const handleEnrollLecture = (lectureId: number) => {
+    enrollMutation.mutate(lectureId);
+  };
+
+  const handleRemoveLecture = (lectureId: number) => {
+    if (window.confirm('정말 수강을 취소하시겠습니까?')) {
+      removeMutation.mutate(lectureId);
+    }
   };
 
   return (
@@ -110,7 +156,7 @@ const StudentFormPage = () => {
             {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
           </div>
 
-          {/* 학교 & 학년 (드롭다운 적용) */}
+          {/* 학교 & 학년 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">학교</label>
@@ -182,9 +228,49 @@ const StudentFormPage = () => {
             </div>
           </div>
 
+          {/* 수강 정보 섹션 (수정 모드일 때만 표시) */}
+          {isEditMode && (
+            <div className="border-t border-gray-200 pt-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">수강 정보</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsLectureModalOpen(true)}
+                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  + 강의 추가
+                </button>
+              </div>
+
+              {enrolledLectures?.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-md">
+                  수강 중인 강의가 없습니다.
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-200 border border-gray-200 rounded-md">
+                  {enrolledLectures?.map((lecture) => (
+                    <li key={lecture.lectureId} className="px-4 py-3 flex justify-between items-center bg-white">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{lecture.name}</p>
+                        <p className="text-xs text-gray-500">{lecture.instructorName}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLecture(lecture.lectureId)}
+                        className="text-xs text-red-600 hover:text-red-800 border border-red-200 px-2 py-1 rounded hover:bg-red-50"
+                      >
+                        수강 취소
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {/* 퇴원 관리 (수정 모드일 때만 표시) */}
           {isEditMode && (
-            <div className="border-t border-gray-200 pt-4 bg-gray-50 p-4 rounded-md">
+            <div className="border-t border-gray-200 pt-4 bg-gray-50 p-4 rounded-md mt-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">상태 관리</h3>
               
               <div className="flex gap-6 mb-4">
@@ -208,7 +294,6 @@ const StudentFormPage = () => {
                 </label>
               </div>
 
-              {/* 퇴원 선택 시 퇴원일 입력창 표시 */}
               {status === 'DISCHARGED' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
@@ -254,6 +339,14 @@ const StudentFormPage = () => {
           </div>
         </form>
       </div>
+
+      {/* 강의 선택 모달 */}
+      <LectureSelectModal
+        isOpen={isLectureModalOpen}
+        onClose={() => setIsLectureModalOpen(false)}
+        onSelect={handleEnrollLecture}
+        enrolledLectureIds={enrolledLectures?.map(l => l.lectureId) || []}
+      />
     </div>
   );
 };
