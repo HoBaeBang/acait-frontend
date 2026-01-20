@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { jwtDecode } from 'jwt-decode';
 
-// JWT 토큰 페이로드 타입 정의 (백엔드 실제 응답 반영)
+// JWT 토큰 페이로드 타입 정의
 interface JwtPayload {
-  sub: string; // 구글 이메일
-  auth: 'ROLE_OWNER' | 'ROLE_INSTRUCTOR' | 'ROLE_SUPER_ADMIN' | 'ROLE_ADMIN'; // 백엔드는 'auth' 키 사용
+  sub: string;
+  auth: 'ROLE_OWNER' | 'ROLE_INSTRUCTOR' | 'ROLE_SUPER_ADMIN' | 'ROLE_ADMIN';
   academyId?: number; 
   exp: number;
 }
@@ -40,8 +40,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             user: {
               email: decoded.sub,
-              // 백엔드의 'auth' 필드를 프론트엔드의 'role'로 매핑
-              role: decoded.auth,
+              role: decoded.auth, 
               academyId: decoded.academyId || null
             }
           });
@@ -62,6 +61,23 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      storage: createJSONStorage(() => localStorage),
+      version: 1, // 버전 관리: 구조 변경 시 버전을 올리면 이전 데이터 무시됨
+      migrate: (persistedState: any, version: number) => {
+        if (version === 0) {
+          // 버전 0에서 1로 마이그레이션 할 때 처리 (필요 시)
+          // 여기서는 그냥 초기화
+          return { token: null, isAuthenticated: false, user: null };
+        }
+        return persistedState as AuthState;
+      },
+      onRehydrateStorage: () => (state) => {
+        // 스토리지 복원 후 실행됨
+        if (!state) {
+          console.warn('Auth store hydration failed. Clearing storage.');
+          localStorage.removeItem('auth-storage');
+        }
+      },
     }
   )
 );
