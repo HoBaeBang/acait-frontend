@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -49,10 +49,6 @@ const CalendarView = () => {
   const queryClient = useQueryClient();
   const calendarRef = useRef<FullCalendar>(null);
   
-  // 로컬 상태로 이벤트 관리 (FullCalendar의 events 함수 방식 사용 시 useQuery 대신 직접 관리 필요할 수도 있음)
-  // 하지만 useGroupedEvents 훅을 사용하려면 데이터를 먼저 받아와야 함.
-  // 여기서는 FullCalendar의 datesSet 이벤트를 활용하여 날짜 변경 시 데이터를 다시 fetch하는 방식을 사용.
-  
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [rawEvents, setRawEvents] = useState<LectureEvent[]>([]);
 
@@ -101,8 +97,7 @@ const CalendarView = () => {
   });
 
   // 날짜 범위가 변경될 때마다 데이터 fetch
-  // useQuery를 사용하여 캐싱 및 리페칭 관리
-  const { isLoading } = useQuery({ // data는 직접 사용하지 않고 onSuccess 등에서 처리하거나, groupedEvents에 전달
+  const { isLoading } = useQuery({
     queryKey: ['lectureEvents', dateRange.start, dateRange.end],
     queryFn: () => getLectureEvents(dateRange.start, dateRange.end),
     enabled: !!dateRange.start && !!dateRange.end,
@@ -131,9 +126,7 @@ const CalendarView = () => {
     },
   });
 
-  // FullCalendar가 날짜 범위를 알려줄 때 호출됨
   const handleDatesSet = (arg: any) => {
-    // ISO 문자열로 변환 (YYYY-MM-DD)
     const startStr = arg.startStr.split('T')[0];
     const endStr = arg.endStr.split('T')[0];
     
@@ -324,8 +317,8 @@ const CalendarView = () => {
             right: 'dayGridMonth,timeGridWeek,timeGridDay'
           }}
           locale="ko"
-          events={groupedEvents} // 그룹화된 이벤트 전달
-          datesSet={handleDatesSet} // 날짜 변경 감지 -> 데이터 리페칭
+          events={groupedEvents}
+          datesSet={handleDatesSet}
           eventContent={renderEventContent}
           editable={true}
           eventDrop={handleEventDrop}
