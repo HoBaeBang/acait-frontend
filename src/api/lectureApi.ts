@@ -41,6 +41,7 @@ export interface LectureEvent {
     description?: string;
     instructor?: string;
     isRecurring?: boolean;
+    lectureId?: number; // 추가됨
   };
 }
 
@@ -51,9 +52,11 @@ export interface UpdateScheduleRequest {
   scope: 'INSTANCE' | 'SERIES';
 }
 
-// 강의 목록 조회
-export const getLectures = async (): Promise<Lecture[]> => {
-  const response = await client.get<Lecture[]>('/lecture');
+// 강의 목록 조회 (역할에 따라 분기)
+export const getLectures = async (role?: string | null): Promise<Lecture[]> => {
+  // 원장이면 전체 목록, 강사면 내 목록 조회
+  const url = role === 'ROLE_OWNER' ? '/lecture/all' : '/lecture';
+  const response = await client.get<Lecture[]>(url);
   return response.data;
 };
 
@@ -62,9 +65,8 @@ export const createLecture = async (data: CreateLectureRequest): Promise<void> =
   await client.post('/lecture', data);
 };
 
-// 캘린더용 이벤트 조회 (기간 파라미터 추가)
+// 캘린더용 이벤트 조회
 export const getLectureEvents = async (start: string, end: string): Promise<LectureEvent[]> => {
-  // 백엔드 API: GET /api/v1/lecture/events?start=2026-01-01&end=2026-02-01
   const response = await client.get<LectureEvent[]>('/lecture/events', {
     params: { start, end }
   });

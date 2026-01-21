@@ -34,7 +34,6 @@ const InstructorPage = () => {
     }
   };
 
-  // 역할 표시 헬퍼 함수
   const getRoleLabel = (role: string) => {
     switch (role) {
       case 'ROLE_OWNER': return '원장';
@@ -69,7 +68,7 @@ const InstructorPage = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {instructors?.map((instructor) => (
-              <tr key={instructor.memberId}>
+              <tr key={instructor.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{instructor.name}</div>
                   <div className="text-xs text-gray-500">{getRoleLabel(instructor.role)}</div>
@@ -97,7 +96,7 @@ const InstructorPage = () => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   {instructor.status === 'PENDING' && (
                     <button
-                      onClick={() => handleApprove(instructor.memberId)}
+                      onClick={() => handleApprove(instructor.id)}
                       className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-md text-xs transition-colors"
                     >
                       승인하기
