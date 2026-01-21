@@ -50,7 +50,7 @@ const CalendarView = () => {
   const calendarRef = useRef<FullCalendar>(null);
   
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [rawEvents, setRawEvents] = useState<LectureEvent[]>([]);
+  // const [rawEvents, setRawEvents] = useState<LectureEvent[]>([]); // 제거됨
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<{
@@ -97,13 +97,11 @@ const CalendarView = () => {
   });
 
   // 날짜 범위가 변경될 때마다 데이터 fetch
-  const { isLoading } = useQuery({
+  // useQuery v5에서는 onSuccess가 제거되었으므로 data를 직접 사용
+  const { data: rawEvents = [], isLoading } = useQuery({
     queryKey: ['lectureEvents', dateRange.start, dateRange.end],
     queryFn: () => getLectureEvents(dateRange.start, dateRange.end),
     enabled: !!dateRange.start && !!dateRange.end,
-    onSuccess: (data) => {
-      setRawEvents(data);
-    }
   });
 
   const groupedEvents = useGroupedEvents(rawEvents);
@@ -194,7 +192,7 @@ const CalendarView = () => {
     }
     setRecordModalData({
       isOpen: true,
-      lectureId: parseInt(event.id),
+      lectureId: parseInt(event.extendedProps?.lectureId || 0), // lectureId 참조 수정
       studentId: 1, 
       studentName: '홍길동',
       date: event.start!.toISOString().slice(0, 10),
