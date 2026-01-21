@@ -1,7 +1,7 @@
 import { client } from './client';
 
 export interface SettlementSummary {
-  id: number; // 정산 ID (상세 조회용)
+  id: number;
   instructorName: string;
   yearMonth: string;
   totalAmount: number;
@@ -15,12 +15,28 @@ export interface SettlementDetail {
   lectureName: string;
   studentName: string;
   amount: number;
-  status: 'ATTENDED' | 'MAKEUP'; // 출석 상태
+  status: 'ATTENDED' | 'MAKEUP';
 }
 
-// 정산 대시보드 조회 (목록 반환으로 변경됨)
-export const getSettlementDashboard = async (yearMonth: string): Promise<SettlementSummary[]> => {
-  const response = await client.get<SettlementSummary[]>('/settlements/dashboard', {
+// 예상 정산 금액 DTO (추가됨)
+export interface SettlementForecast {
+  confirmedAmount: number; // 확정 금액 (세후)
+  expectedAmount: number;  // 예상 추가 금액 (세후)
+  totalForecastAmount: number; // 월 예상 총액 (세후)
+}
+
+// 정산 대시보드 조회 (확정 금액)
+export const getSettlementDashboard = async (yearMonth: string, role?: string | null): Promise<SettlementSummary[]> => {
+  const url = role === 'ROLE_OWNER' ? '/settlements/dashboard' : '/settlements/my';
+  const response = await client.get<SettlementSummary[]>(url, {
+    params: { yearMonth },
+  });
+  return response.data;
+};
+
+// 예상 정산 금액 조회 (추가됨)
+export const getSettlementForecast = async (yearMonth: string): Promise<SettlementForecast> => {
+  const response = await client.get<SettlementForecast>('/settlements/forecast', {
     params: { yearMonth },
   });
   return response.data;
@@ -36,10 +52,9 @@ export const getSettlementDetails = async (settlementId: number): Promise<Settle
 export const downloadSettlementExcel = async (yearMonth: string): Promise<void> => {
   const response = await client.get('/settlements/excel', {
     params: { yearMonth },
-    responseType: 'blob', // 파일 다운로드를 위해 blob 설정 필수
+    responseType: 'blob',
   });
 
-  // 브라우저에서 파일 다운로드 트리거
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
   link.href = url;

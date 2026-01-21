@@ -1,29 +1,39 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getSettlementDashboard, getSettlementDetails, downloadSettlementExcel, SettlementSummary } from '../api/settlementApi';
+import { getSettlementDashboard, getSettlementDetails, downloadSettlementExcel, getSettlementForecast } from '../api/settlementApi';
+import { useAuthStore } from '../stores/authStore';
 import clsx from 'clsx';
 
 const SettlementPage = () => {
+  const { user } = useAuthStore();
   const today = new Date();
   const currentYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   
   const [yearMonth, setYearMonth] = useState(currentYearMonth);
   const [selectedSettlementId, setSelectedSettlementId] = useState<number | null>(null);
 
-  // 1. 정산 요약 목록 조회
+  // 1. 정산 요약 목록 조회 (확정 금액)
   const { data: summaries, isLoading: isSummaryLoading } = useQuery({
-    queryKey: ['settlement', yearMonth],
-    queryFn: () => getSettlementDashboard(yearMonth),
+    queryKey: ['settlement', yearMonth, user?.role],
+    queryFn: () => getSettlementDashboard(yearMonth, user?.role),
   });
 
-  // 2. 선택된 정산의 상세 내역 조회
+  // 2. 예상 정산 금액 조회 (추가됨)
+  const { data: forecast } = useQuery({
+    queryKey: ['settlementForecast', yearMonth],
+    queryFn: () => getSettlementForecast(yearMonth),
+    // 강사 본인일 때만, 그리고 이번 달일 때만 조회하는 것이 좋음 (과거는 예상이 의미 없음)
+    enabled: user?.role === 'ROLE_INSTRUCTOR' && yearMonth === currentYearMonth,
+  });
+
+  // 3. 선택된 정산의 상세 내역 조회
   const { data: details, isLoading: isDetailLoading } = useQuery({
     queryKey: ['settlementDetail', selectedSettlementId],
     queryFn: () => getSettlementDetails(selectedSettlementId!),
-    enabled: !!selectedSettlementId, // ID가 선택되었을 때만 실행
+    enabled: !!selectedSettlementId,
   });
 
-  // 전체 합계 계산
+  // 전체 합계 계산 (원장용)
   const totalSummary = summaries?.reduce((acc, curr) => ({
     totalAmount: acc.totalAmount + curr.totalAmount,
     taxAmount: acc.taxAmount + curr.taxAmount,
@@ -54,7 +64,7 @@ const SettlementPage = () => {
               value={yearMonth}
               onChange={(e) => {
                 setYearMonth(e.target.value);
-                setSelectedSettlementId(null); // 월 변경 시 상세 선택 초기화
+                setSelectedSettlementId(null);
               }}
               className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
             />
@@ -68,39 +78,80 @@ const SettlementPage = () => {
         </div>
       </div>
 
-      {/* 전체 요약 카드 */}
+      {/* 요약 카드 섹션 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <dt className="text-sm font-medium text-gray-500 truncate">총 매출 (세전)</dt>
-            <dd className="mt-1 text-3xl font-semibold text-gray-900">
-              {totalSummary?.totalAmount.toLocaleString()}원
-            </dd>
-          </div>
-        </div>
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <dt className="text-sm font-medium text-gray-500 truncate">공제액 (3.3%)</dt>
-            <dd className="mt-1 text-3xl font-semibold text-red-600">
-              - {totalSummary?.taxAmount.toLocaleString()}원
-            </dd>
-          </div>
-        </div>
-        <div className="bg-blue-50 overflow-hidden shadow rounded-lg border border-blue-100">
-          <div className="px-4 py-5 sm:p-6">
-            <dt className="text-sm font-medium text-blue-600 truncate">실지급액 합계</dt>
-            <dd className="mt-1 text-3xl font-bold text-blue-700">
-              {totalSummary?.realAmount.toLocaleString()}원
-            </dd>
-          </div>
-        </div>
+        {/* 강사일 경우: 예상 정산 금액 표시 */}
+        {user?.role === 'ROLE_INSTRUCTOR' && forecast ? (
+          <>
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-gray-500 truncate">현재 확정 금액 (세후)</dt>
+                <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                  {forecast.confirmedAmount.toLocaleString()}원
+                </dd>
+              </div>
+            </div>
+            <div className="bg-white overflow-hidden shadow rounded-lg border-2 border-dashed border-blue-200">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-blue-500 truncate">남은 수업 예상 (세후)</dt>
+                <dd className="mt-1 text-3xl font-semibold text-blue-600">
+                  + {forecast.expectedAmount.toLocaleString()}원
+                </dd>
+                <p className="mt-2 text-xs text-gray-400">
+                  예정된 수업을 모두 진행할 경우
+                </p>
+              </div>
+            </div>
+            <div className="bg-blue-50 overflow-hidden shadow rounded-lg border border-blue-100">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-blue-600 truncate">이번 달 예상 총액</dt>
+                <dd className="mt-1 text-3xl font-bold text-blue-700">
+                  {forecast.totalForecastAmount.toLocaleString()}원
+                </dd>
+                <p className="mt-2 text-xs text-blue-400">
+                  확정 + 예상 합계
+                </p>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* 원장일 경우: 기존 확정 금액 합계 표시 */
+          <>
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-gray-500 truncate">총 매출 (세전)</dt>
+                <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                  {totalSummary?.totalAmount.toLocaleString()}원
+                </dd>
+              </div>
+            </div>
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-gray-500 truncate">공제액 (3.3%)</dt>
+                <dd className="mt-1 text-3xl font-semibold text-red-600">
+                  - {totalSummary?.taxAmount.toLocaleString()}원
+                </dd>
+              </div>
+            </div>
+            <div className="bg-blue-50 overflow-hidden shadow rounded-lg border border-blue-100">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-blue-600 truncate">실지급액 합계</dt>
+                <dd className="mt-1 text-3xl font-bold text-blue-700">
+                  {totalSummary?.realAmount.toLocaleString()}원
+                </dd>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* 왼쪽: 강사별 정산 목록 */}
         <div className="lg:col-span-1 bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-4 border-b border-gray-200 bg-gray-50">
-            <h3 className="text-lg font-medium text-gray-900">강사별 정산 내역</h3>
+            <h3 className="text-lg font-medium text-gray-900">
+              {user?.role === 'ROLE_OWNER' ? '강사별 정산 내역' : '내 정산 내역'}
+            </h3>
           </div>
           <ul className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
             {summaries?.map((summary) => (
@@ -139,7 +190,7 @@ const SettlementPage = () => {
         <div className="lg:col-span-2 bg-white shadow rounded-lg overflow-hidden">
           <div className="px-4 py-4 border-b border-gray-200 bg-gray-50">
             <h3 className="text-lg font-medium text-gray-900">
-              {selectedSettlementId ? '상세 수업 내역' : '강사를 선택해주세요'}
+              {selectedSettlementId ? '상세 수업 내역' : '목록에서 선택해주세요'}
             </h3>
           </div>
           
@@ -190,7 +241,7 @@ const SettlementPage = () => {
             )
           ) : (
             <div className="p-12 text-center text-gray-400">
-              왼쪽 목록에서 강사를 선택하면<br/>상세 수업 내역을 확인할 수 있습니다.
+              왼쪽 목록에서 항목을 선택하면<br/>상세 수업 내역을 확인할 수 있습니다.
             </div>
           )}
         </div>
