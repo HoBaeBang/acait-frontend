@@ -18,11 +18,13 @@ export interface SettlementDetail {
   status: 'ATTENDED' | 'MAKEUP';
 }
 
-// 예상 정산 금액 DTO (추가됨)
+// 예상 정산 금액 DTO (백엔드 응답 구조 반영)
 export interface SettlementForecast {
-  confirmedAmount: number; // 확정 금액 (세후)
-  expectedAmount: number;  // 예상 추가 금액 (세후)
-  totalForecastAmount: number; // 월 예상 총액 (세후)
+  confirmedAmount: number; // 확정 금액 (세전)
+  expectedAmount: number;  // 예상 추가 금액 (세전)
+  totalAmount: number;     // 총 예상 금액 (세전)
+  taxAmount: number;       // 예상 공제액
+  realAmount: number;      // 예상 실지급액 (세후)
 }
 
 // 정산 대시보드 조회 (확정 금액)
@@ -34,7 +36,7 @@ export const getSettlementDashboard = async (yearMonth: string, role?: string | 
   return response.data;
 };
 
-// 예상 정산 금액 조회 (추가됨)
+// 예상 정산 금액 조회
 export const getSettlementForecast = async (yearMonth: string): Promise<SettlementForecast> => {
   const response = await client.get<SettlementForecast>('/settlements/forecast', {
     params: { yearMonth },

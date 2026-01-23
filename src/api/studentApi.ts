@@ -1,17 +1,14 @@
 import { client } from './client';
 
 export interface Student {
-  studentId: number;
-  studentNumber: string; // 학번 (자동생성, Read-Only)
+  id: number;
+  studentNumber: string; // 학번 (상세 조회 시 사용)
   name: string;
-  school?: string;
-  grade: string; // E1, M1 ...
-  birthDate?: string;
+  school: string;
+  grade: string;
   parentPhone: string;
-  parentEmail?: string;
-  memo?: string;
-  status: 'ATTENDING' | 'DISCHARGED'; // 재원/퇴원 상태
-  dischargeDate?: string; // 퇴원일 (YYYY-MM-DD)
+  status: 'ATTENDING' | 'DISCHARGED';
+  createdAt: string;
 }
 
 export interface StudentRequest {
@@ -28,13 +25,23 @@ export interface StudentRequest {
 
 // 학생 목록 조회
 export const getStudents = async (): Promise<Student[]> => {
-  const response = await client.get<Student[]>('/students');
-  return response.data;
+  const response = await client.get<any[]>('/students');
+  return response.data.map((item) => ({
+    id: item.id,
+    studentNumber: item.studentNumber, // 백엔드 응답에서 매핑
+    name: item.name,
+    school: item.school,
+    grade: item.grade,
+    parentPhone: item.parentPhone,
+    status: item.status,
+    createdAt: item.createdAt,
+  }));
 };
 
 // 학생 상세 조회
-export const getStudent = async (id: string): Promise<Student> => {
-  const response = await client.get<Student>(`/students/${id}`);
+export const getStudent = async (studentNumber: string): Promise<any> => {
+  // 백엔드 API: GET /api/v1/students/{studentNumber}
+  const response = await client.get(`/students/${studentNumber}`);
   return response.data;
 };
 
@@ -44,11 +51,6 @@ export const createStudent = async (data: StudentRequest): Promise<void> => {
 };
 
 // 학생 수정
-export const updateStudent = async (id: string, data: StudentRequest): Promise<void> => {
-  await client.put(`/students/${id}`, data);
-};
-
-// 학생 삭제 (논리 삭제 - 퇴원 처리)
-export const deleteStudent = async (id: number): Promise<void> => {
-  await client.delete(`/students/${id}`);
+export const updateStudent = async (studentNumber: string, data: StudentRequest): Promise<void> => {
+  await client.put(`/students/${studentNumber}`, data);
 };

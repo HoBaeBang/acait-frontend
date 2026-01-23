@@ -2,7 +2,7 @@ import { client } from './client';
 
 // 강의 정보 인터페이스
 export interface Lecture {
-  lectureId: number;
+  lectureId: number; // 프론트엔드에서 사용하는 ID (백엔드 id와 매핑 필요)
   name: string;
   instructorName: string;
   type: 'BOARD' | 'INDIV';
@@ -41,7 +41,7 @@ export interface LectureEvent {
     description?: string;
     instructor?: string;
     isRecurring?: boolean;
-    lectureId?: number; // 추가됨
+    lectureId?: number;
   };
 }
 
@@ -54,10 +54,18 @@ export interface UpdateScheduleRequest {
 
 // 강의 목록 조회 (역할에 따라 분기)
 export const getLectures = async (role?: string | null): Promise<Lecture[]> => {
-  // 원장이면 전체 목록, 강사면 내 목록 조회
   const url = role === 'ROLE_OWNER' ? '/lecture/all' : '/lecture';
-  const response = await client.get<Lecture[]>(url);
-  return response.data;
+  const response = await client.get<any[]>(url); // any[]로 받아서 매핑
+  
+  return response.data.map((item) => ({
+    lectureId: item.id, // 백엔드 id -> 프론트엔드 lectureId 매핑
+    name: item.name,
+    instructorName: item.instructorName || '담당 강사', // instructorName이 없을 경우 대비
+    type: item.type,
+    defaultPrice: item.defaultPrice,
+    defaultDuration: item.defaultDuration,
+    isActive: item.isActive,
+  }));
 };
 
 // 강의 생성

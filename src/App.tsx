@@ -12,11 +12,16 @@ import InstructorPage from './pages/admin/InstructorPage';
 import StudentListPage from './pages/students/StudentListPage';
 import StudentFormPage from './pages/students/StudentFormPage';
 import SettlementPage from './pages/SettlementPage';
-import MaterialPage from './pages/MaterialPage'; // 추가됨
+import MaterialPage from './pages/MaterialPage';
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Routes>
         {/* MainLayout을 감싸는 라우트 */}
         <Route element={<MainLayout />}>
@@ -31,7 +36,7 @@ function App() {
           <Route path="/students/new" element={<StudentFormPage />} />
           <Route path="/students/:id/edit" element={<StudentFormPage />} />
           
-          {/* 교재 관리 (추가됨) */}
+          {/* 교재 관리 */}
           <Route path="/materials" element={<MaterialPage />} />
 
           {/* 정산 관리 */}

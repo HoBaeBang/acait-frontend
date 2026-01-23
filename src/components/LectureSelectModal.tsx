@@ -36,10 +36,13 @@ const LectureSelectModal: React.FC<LectureSelectModalProps> = ({ isOpen, onClose
                 <div className="text-center py-8">로딩 중...</div>
               ) : (
                 <ul className="divide-y divide-gray-200 max-h-60 overflow-y-auto">
-                  {lectures?.map((lecture) => {
+                  {lectures?.map((lecture, index) => {
                     const isEnrolled = enrolledLectureIds.includes(lecture.lectureId);
+                    // key 중복 방지를 위해 index 조합 (데이터 무결성 이슈 대비)
+                    const uniqueKey = lecture.lectureId ? `${lecture.lectureId}-${index}` : `lecture-${index}`;
+                    
                     return (
-                      <li key={lecture.lectureId} className="py-3 flex justify-between items-center">
+                      <li key={uniqueKey} className="py-3 flex justify-between items-center">
                         <div>
                           <p className="text-sm font-medium text-gray-900">{lecture.name}</p>
                           <p className="text-xs text-gray-500">

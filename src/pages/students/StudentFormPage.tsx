@@ -26,9 +26,8 @@ type StudentFormData = z.infer<typeof studentSchema>;
 
 const StudentFormPage = () => {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id } = useParams(); // id는 studentNumber (string)
   const isEditMode = !!id;
-  const studentId = Number(id);
   const queryClient = useQueryClient();
   const [isLectureModalOpen, setIsLectureModalOpen] = useState(false);
 
@@ -37,6 +36,7 @@ const StudentFormPage = () => {
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
@@ -56,10 +56,11 @@ const StudentFormPage = () => {
   });
 
   // 수강 중인 강의 목록 조회 (수정 모드일 때만)
+  // studentId(숫자) 변환 제거 -> id(문자열) 그대로 사용
   const { data: enrolledLectures } = useQuery({
-    queryKey: ['studentLectures', studentId],
-    queryFn: () => getStudentLectures(studentId),
-    enabled: isEditMode,
+    queryKey: ['studentLectures', id],
+    queryFn: () => getStudentLectures(id!),
+    enabled: isEditMode && !!id, // id가 있을 때만 실행
   });
 
   useEffect(() => {
@@ -67,6 +68,19 @@ const StudentFormPage = () => {
       reset(studentData);
     }
   }, [studentData, reset]);
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+    let formattedValue = rawValue;
+
+    if (rawValue.length > 3 && rawValue.length <= 7) {
+      formattedValue = `${rawValue.slice(0, 3)}-${rawValue.slice(3)}`;
+    } else if (rawValue.length > 7) {
+      formattedValue = `${rawValue.slice(0, 3)}-${rawValue.slice(3, 7)}-${rawValue.slice(7, 11)}`;
+    }
+
+    setValue('parentPhone', formattedValue, { shouldValidate: true });
+  };
 
   const mutation = useMutation({
     mutationFn: (data: StudentRequest) => 
@@ -81,11 +95,17 @@ const StudentFormPage = () => {
     },
   });
 
-  // 수강 신청 뮤테이션
+  // 수강 신청 뮤테이션 (studentData.id 사용)
   const enrollMutation = useMutation({
-    mutationFn: (lectureId: number) => enrollStudent(lectureId, studentId),
+    mutationFn: (lectureId: number) => {
+      // 백엔드가 studentId(PK)를 요구한다면 studentData.id를 써야 함
+      // 백엔드가 studentNumber를 요구한다면 id를 써야 함
+      // 여기서는 studentData.id (PK)를 우선 사용 (안전)
+      const targetId = studentData?.id || Number(id); 
+      return enrollStudent(lectureId, String(targetId));
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['studentLectures', studentId] });
+      queryClient.invalidateQueries({ queryKey: ['studentLectures', id] });
       alert('강의가 추가되었습니다.');
       setIsLectureModalOpen(false);
     },
@@ -96,9 +116,12 @@ const StudentFormPage = () => {
 
   // 수강 취소 뮤테이션
   const removeMutation = useMutation({
-    mutationFn: (lectureId: number) => removeStudent(lectureId, studentId),
+    mutationFn: (lectureId: number) => {
+      const targetId = studentData?.id || Number(id);
+      return removeStudent(lectureId, String(targetId));
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['studentLectures', studentId] });
+      queryClient.invalidateQueries({ queryKey: ['studentLectures', id] });
       alert('수강이 취소되었습니다.');
     },
     onError: () => {
@@ -129,7 +152,6 @@ const StudentFormPage = () => {
       <div className="bg-white shadow rounded-lg p-6">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           
-          {/* 학번 (수정 모드일 때만 표시, Read-Only) */}
           {isEditMode && studentData && (
             <div>
               <label className="block text-sm font-medium text-gray-700">학번</label>
@@ -142,7 +164,6 @@ const StudentFormPage = () => {
             </div>
           )}
 
-          {/* 이름 */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               이름 <span className="text-red-500">*</span>
@@ -156,7 +177,6 @@ const StudentFormPage = () => {
             {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
           </div>
 
-          {/* 학교 & 학년 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">학교</label>
@@ -185,7 +205,6 @@ const StudentFormPage = () => {
             </div>
           </div>
 
-          {/* 생년월일 */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               생일 (4자리) <span className="text-gray-400 text-xs ml-1">*학부모 조회 인증용</span>
@@ -210,8 +229,10 @@ const StudentFormPage = () => {
               <input
                 type="text"
                 {...register('parentPhone')}
+                onChange={handlePhoneChange}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                 placeholder="010-1234-5678"
+                maxLength={13}
               />
               {errors.parentPhone && <p className="mt-1 text-sm text-red-600">{errors.parentPhone.message}</p>}
             </div>
@@ -228,7 +249,6 @@ const StudentFormPage = () => {
             </div>
           </div>
 
-          {/* 수강 정보 섹션 (수정 모드일 때만 표시) */}
           {isEditMode && (
             <div className="border-t border-gray-200 pt-4">
               <div className="flex justify-between items-center mb-4">
@@ -268,7 +288,6 @@ const StudentFormPage = () => {
             </div>
           )}
 
-          {/* 퇴원 관리 (수정 모드일 때만 표시) */}
           {isEditMode && (
             <div className="border-t border-gray-200 pt-4 bg-gray-50 p-4 rounded-md mt-6">
               <h3 className="text-lg font-medium text-gray-900 mb-4">상태 관리</h3>
@@ -309,7 +328,6 @@ const StudentFormPage = () => {
             </div>
           )}
 
-          {/* 메모 */}
           <div>
             <label className="block text-sm font-medium text-gray-700">메모</label>
             <textarea
@@ -320,7 +338,6 @@ const StudentFormPage = () => {
             />
           </div>
 
-          {/* 버튼 그룹 */}
           <div className="flex justify-end gap-3 pt-4">
             <button
               type="button"
@@ -340,7 +357,6 @@ const StudentFormPage = () => {
         </form>
       </div>
 
-      {/* 강의 선택 모달 */}
       <LectureSelectModal
         isOpen={isLectureModalOpen}
         onClose={() => setIsLectureModalOpen(false)}
