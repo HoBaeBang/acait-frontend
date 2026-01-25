@@ -7,11 +7,12 @@ interface LectureRecordModalProps {
   isOpen: boolean;
   onClose: () => void;
   lectureId: number;
-  studentId: number; // 현재는 단일 학생 선택 가정 (추후 다중 선택으로 확장 가능)
+  studentId: number;
   studentName: string;
   date: string;
   startTime: string;
   endTime: string;
+  onEditSchedule?: () => void; // 일정 변경 핸들러 추가
 }
 
 const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
@@ -23,6 +24,7 @@ const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
   date,
   startTime,
   endTime,
+  onEditSchedule,
 }) => {
   const queryClient = useQueryClient();
 
@@ -37,7 +39,7 @@ const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
   const mutation = useMutation({
     mutationFn: createRecord,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lectureEvents'] }); // 캘린더 갱신
+      queryClient.invalidateQueries({ queryKey: ['lectureEvents'] });
       alert('수업 기록이 저장되었습니다.');
       onClose();
       reset();
@@ -67,9 +69,20 @@ const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
         <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
           <div className="sm:flex sm:items-start">
             <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-              <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                수업 기록 ({studentName})
-              </h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                  수업 기록 ({studentName})
+                </h3>
+                {onEditSchedule && (
+                  <button
+                    type="button"
+                    onClick={onEditSchedule}
+                    className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 px-2 py-1 rounded hover:bg-blue-50"
+                  >
+                    📅 일정 변경
+                  </button>
+                )}
+              </div>
               <p className="text-sm text-gray-500 mb-4">{date} {startTime} ~ {endTime}</p>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -97,7 +110,7 @@ const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
                   </div>
                 </div>
 
-                {/* 실제 시간 (개별 진도용) */}
+                {/* 실제 시간 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">시작 시간</label>

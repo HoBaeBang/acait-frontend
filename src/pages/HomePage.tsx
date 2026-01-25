@@ -12,6 +12,7 @@ import ScheduleEditModal from '../components/ScheduleEditModal';
 import LectureRecordModal from '../components/LectureRecordModal';
 import MakeupScheduleModal from '../components/MakeupScheduleModal';
 import GroupDetailModal from '../components/GroupDetailModal';
+import ScheduleChangeModal from '../components/ScheduleChangeModal';
 import { useGroupedEvents } from '../hooks/useGroupedEvents';
 
 const HomePage = () => {
@@ -50,14 +51,24 @@ const CalendarView = () => {
   const calendarRef = useRef<FullCalendar>(null);
   
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  // const [rawEvents, setRawEvents] = useState<LectureEvent[]>([]); // 제거됨
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isChangeModalOpen, setIsChangeModalOpen] = useState(false);
+  
   const [pendingUpdate, setPendingUpdate] = useState<{
     ids: string[];
     start: Date;
     end: Date;
-    revert: () => void;
+    originalStart: Date;
+    revert?: () => void;
+  } | null>(null);
+
+  const [changeModalData, setChangeModalData] = useState<{
+    scheduleId: string;
+    currentDate: string;
+    currentStartTime: string;
+    currentEndTime: string;
+    originalStart: string;
   } | null>(null);
 
   const [recordModalData, setRecordModalData] = useState<{
@@ -68,6 +79,7 @@ const CalendarView = () => {
     date: string;
     startTime: string;
     endTime: string;
+    originalEventId?: string;
   }>({
     isOpen: false,
     lectureId: 0,
@@ -96,8 +108,6 @@ const CalendarView = () => {
     subEvents: [],
   });
 
-  // 날짜 범위가 변경될 때마다 데이터 fetch
-  // useQuery v5에서는 onSuccess가 제거되었으므로 data를 직접 사용
   const { data: rawEvents = [], isLoading } = useQuery({
     queryKey: ['lectureEvents', dateRange.start, dateRange.end],
     queryFn: () => getLectureEvents(dateRange.start, dateRange.end),
@@ -116,9 +126,10 @@ const CalendarView = () => {
       setIsEditModalOpen(false);
       setPendingUpdate(null);
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Update Error:', error);
       alert('일정 수정에 실패했습니다.');
-      pendingUpdate?.revert();
+      pendingUpdate?.revert?.();
       setIsEditModalOpen(false);
       setPendingUpdate(null);
     },
@@ -134,20 +145,30 @@ const CalendarView = () => {
   };
 
   const handleEventDrop = (info: EventDropArg) => {
-    const { event, revert } = info;
+    const { event, oldEvent, revert } = info;
     const extendedProps = event.extendedProps as any;
     
     let targetIds: string[] = [];
     if (extendedProps.subEvents && extendedProps.subEvents.length > 0) {
-      targetIds = extendedProps.subEvents.map((e: any) => e.id);
+      targetIds = extendedProps.subEvents.map((e: any) => e.extendedProps?.originalId || e.id);
     } else {
-      targetIds = [event.id];
+      const originalId = extendedProps.originalId || event.id;
+      targetIds = [originalId];
     }
+
+    console.log('Dropping Event:', {
+      event,
+      oldEvent,
+      targetIds,
+      newStart: event.start,
+      originalStart: oldEvent.start
+    });
 
     setPendingUpdate({
       ids: targetIds,
       start: event.start!,
       end: event.end!,
+      originalStart: oldEvent.start!,
       revert,
     });
     setIsEditModalOpen(true);
@@ -155,21 +176,32 @@ const CalendarView = () => {
 
   const handleConfirmUpdate = (scope: 'INSTANCE' | 'SERIES') => {
     if (!pendingUpdate) return;
+    
+    // Timezone 문제 해결을 위한 날짜 포맷팅 함수
+    const formatDate = (date: Date) => {
+      // 로컬 시간 기준으로 YYYY-MM-DD 반환
+      const offset = date.getTimezoneOffset() * 60000;
+      const localDate = new Date(date.getTime() - offset);
+      return localDate.toISOString().slice(0, 10);
+    };
+    
     const formatTime = (date: Date) => date.toTimeString().slice(0, 5);
-    const formatDate = (date: Date) => date.toISOString().slice(0, 10);
 
     const requestData: UpdateScheduleRequest = {
       startTime: formatTime(pendingUpdate.start),
       endTime: formatTime(pendingUpdate.end),
-      targetDate: formatDate(pendingUpdate.start),
+      targetDate: scope === 'INSTANCE' ? formatDate(pendingUpdate.originalStart) : formatDate(pendingUpdate.start),
       scope,
+      newDate: formatDate(pendingUpdate.start),
     };
+
+    console.log('Updating Schedule:', { ids: pendingUpdate.ids, req: requestData });
 
     updateMutation.mutate({ ids: pendingUpdate.ids, req: requestData });
   };
 
   const handleCloseModal = () => {
-    pendingUpdate?.revert();
+    pendingUpdate?.revert?.();
     setIsEditModalOpen(false);
     setPendingUpdate(null);
   };
@@ -178,7 +210,7 @@ const CalendarView = () => {
     const event = info.event;
     const extendedProps = event.extendedProps as any;
 
-    if (extendedProps.subEvents && extendedProps.subEvents.length > 0) {
+    if (extendedProps.isGroup && extendedProps.subEvents && extendedProps.subEvents.length > 0) {
       setGroupDetailData({
         isOpen: true,
         subEvents: extendedProps.subEvents,
@@ -190,20 +222,50 @@ const CalendarView = () => {
       alert('미래의 수업은 기록할 수 없습니다.');
       return;
     }
+    
+    openRecordModal(event);
+  };
+
+  const handleGroupItemEdit = (event: LectureEvent) => {
+    setGroupDetailData(prev => ({ ...prev, isOpen: false }));
+    
     setRecordModalData({
       isOpen: true,
-      lectureId: parseInt(event.extendedProps?.lectureId || 0), // lectureId 참조 수정
+      lectureId: parseInt(event.extendedProps?.lectureId?.toString() || '0'),
+      studentId: 1, 
+      studentName: '홍길동',
+      date: event.start.toString().slice(0, 10),
+      startTime: event.start.toString().slice(11, 16),
+      endTime: event.end.toString().slice(11, 16),
+      originalEventId: event.extendedProps?.originalId || event.id,
+    });
+  };
+
+  const openRecordModal = (event: any) => {
+    setRecordModalData({
+      isOpen: true,
+      lectureId: parseInt(event.extendedProps?.lectureId || 0),
       studentId: 1, 
       studentName: '홍길동',
       date: event.start!.toISOString().slice(0, 10),
       startTime: event.start!.toTimeString().slice(0, 5),
       endTime: event.end!.toTimeString().slice(0, 5),
+      originalEventId: event.extendedProps?.originalId || event.id,
     });
   };
 
-  const handleGroupItemEdit = (event: LectureEvent) => {
-    alert(`'${event.title}' 개별 수정 기능은 준비 중입니다.`);
-    setGroupDetailData(prev => ({ ...prev, isOpen: false }));
+  const handleEditScheduleFromRecord = () => {
+    setRecordModalData(prev => ({ ...prev, isOpen: false }));
+
+    setChangeModalData({
+      scheduleId: recordModalData.originalEventId || '',
+      currentDate: recordModalData.date,
+      currentStartTime: recordModalData.startTime,
+      currentEndTime: recordModalData.endTime,
+      originalStart: recordModalData.date,
+    });
+    
+    setIsChangeModalOpen(true);
   };
 
   const handleDateClick = (info: DateClickArg) => {
@@ -222,7 +284,7 @@ const CalendarView = () => {
       return date.toTimeString().slice(0, 5);
     };
 
-    if (extendedProps.subEvents && extendedProps.subEvents.length > 0) {
+    if (extendedProps.isGroup && extendedProps.subEvents && extendedProps.subEvents.length > 0) {
       const groupStart = formatTime(event.startStr);
       const groupEnd = formatTime(event.endStr);
 
@@ -283,7 +345,20 @@ const CalendarView = () => {
         date={recordModalData.date}
         startTime={recordModalData.startTime}
         endTime={recordModalData.endTime}
+        onEditSchedule={handleEditScheduleFromRecord}
       />
+
+      {changeModalData && (
+        <ScheduleChangeModal
+          isOpen={isChangeModalOpen}
+          onClose={() => setIsChangeModalOpen(false)}
+          scheduleId={changeModalData.scheduleId}
+          currentDate={changeModalData.currentDate}
+          currentStartTime={changeModalData.currentStartTime}
+          currentEndTime={changeModalData.currentEndTime}
+          originalStart={changeModalData.originalStart}
+        />
+      )}
 
       <MakeupScheduleModal
         isOpen={makeupModalData.isOpen}

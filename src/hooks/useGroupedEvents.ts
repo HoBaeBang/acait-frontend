@@ -8,79 +8,101 @@ export interface GroupedEvent extends LectureEvent {
 
 export const useGroupedEvents = (events: LectureEvent[] | undefined) => {
   return useMemo(() => {
-    if (!events) return [];
+    if (!events || events.length === 0) return [];
 
-    // 시작 시간 순으로 정렬
-    const sortedEvents = [...events].sort((a, b) => 
-      new Date(a.start).getTime() - new Date(b.start).getTime()
-    );
+    // 1. 시작 시간 순으로 정렬 (같으면 종료 시간 순)
+    const sortedEvents = [...events].sort((a, b) => {
+      const startDiff = new Date(a.start).getTime() - new Date(b.start).getTime();
+      if (startDiff !== 0) return startDiff;
+      return new Date(a.end).getTime() - new Date(b.end).getTime();
+    });
 
     const grouped: GroupedEvent[] = [];
-    // 중복 처리 방지를 위한 Set (ID + 시작시간 조합)
-    const processedKeys = new Set<string>();
+    
+    // 2. 그룹화 로직 (Chain Overlap 처리)
+    let currentGroup: LectureEvent[] = [];
+    let groupMaxEnd = 0;
 
-    for (let i = 0; i < sortedEvents.length; i++) {
-      const current = sortedEvents[i];
-      // 고유 키 생성: ID + 시작시간
-      const currentKey = `${current.id}-${current.start}`;
-      
-      if (processedKeys.has(currentKey)) continue;
+    for (const event of sortedEvents) {
+      const eventStart = new Date(event.start).getTime();
+      const eventEnd = new Date(event.end).getTime();
 
-      const currentStart = new Date(current.start).getTime();
-      const currentEnd = new Date(current.end).getTime();
-
-      // 현재 이벤트와 겹치는 모든 이벤트 찾기 (시간 교차 검사)
-      const overlapping = sortedEvents.filter((other, idx) => {
-        const otherKey = `${other.id}-${other.start}`;
-        if (i === idx || processedKeys.has(otherKey)) return false;
-        
-        const otherStart = new Date(other.start).getTime();
-        const otherEnd = new Date(other.end).getTime();
-
-        // 교차 조건: (StartA < EndB) && (EndA > StartB)
-        return currentStart < otherEnd && currentEnd > otherStart;
-      });
-
-      if (overlapping.length > 0) {
-        // 그룹 생성
-        const subEvents = [current, ...overlapping];
-        subEvents.forEach(e => processedKeys.add(`${e.id}-${e.start}`));
-
-        // 그룹의 전체 시간 범위 계산
-        const minStart = new Date(Math.min(...subEvents.map(e => new Date(e.start).getTime())));
-        const maxEnd = new Date(Math.max(...subEvents.map(e => new Date(e.end).getTime())));
-
-        grouped.push({
-          id: `group-${current.id}-${current.start}`, // 그룹 ID도 유니크하게
-          title: `${subEvents.length}개의 수업`,
-          start: minStart.toISOString(),
-          end: maxEnd.toISOString(),
-          backgroundColor: '#4F46E5',
-          borderColor: '#4338CA',
-          isGroup: true,
-          subEvents: subEvents,
-          extendedProps: {
-            isRecurring: true,
-          }
-        });
+      if (currentGroup.length === 0) {
+        // 첫 이벤트 시작
+        currentGroup.push(event);
+        groupMaxEnd = eventEnd;
       } else {
-        // 단일 이벤트
-        grouped.push({
-          ...current,
-          // FullCalendar에서 반복 일정의 ID가 같으면 하나만 렌더링하는 경우가 있음
-          // 따라서 렌더링용 ID를 유니크하게 만들어줌
-          id: `${current.id}-${current.start}`, 
-          isGroup: false,
-          subEvents: [],
-          extendedProps: {
-            ...current.extendedProps,
-            originalId: current.id // 원본 ID 보존 (수정/삭제 시 필요)
+        // 현재 그룹과 겹치는지 확인
+        // 디버깅 로그 추가
+        // console.log(`Checking overlap: ${event.title} (${event.start}) vs GroupMaxEnd (${new Date(groupMaxEnd).toISOString()})`);
+        
+        if (eventStart < groupMaxEnd) {
+          // 겹침 -> 그룹에 추가
+          // console.log('  -> Overlap detected!');
+          currentGroup.push(event);
+          // 그룹의 종료 시간 확장
+          if (eventEnd > groupMaxEnd) {
+            groupMaxEnd = eventEnd;
           }
-        });
-        processedKeys.add(currentKey);
+        } else {
+          // 안 겹침 -> 이전 그룹 확정 및 초기화
+          // console.log('  -> No overlap. New group.');
+          pushGroup(grouped, currentGroup);
+          currentGroup = [event];
+          groupMaxEnd = eventEnd;
+        }
       }
+    }
+
+    // 마지막 그룹 처리
+    if (currentGroup.length > 0) {
+      pushGroup(grouped, currentGroup);
     }
 
     return grouped;
   }, [events]);
+};
+
+// 그룹을 생성하여 결과 배열에 추가하는 헬퍼 함수
+const pushGroup = (result: GroupedEvent[], groupEvents: LectureEvent[]) => {
+  if (groupEvents.length === 0) return;
+
+  if (groupEvents.length === 1) {
+    // 단일 이벤트
+    const event = groupEvents[0];
+    result.push({
+      ...event,
+      // 렌더링용 유니크 ID (반복 일정 구분)
+      id: `${event.id}-${event.start}`,
+      isGroup: false,
+      subEvents: [],
+      extendedProps: {
+        ...event.extendedProps,
+        originalId: event.id
+      }
+    });
+  } else {
+    // 그룹 이벤트
+    const minStart = new Date(Math.min(...groupEvents.map(e => new Date(e.start).getTime())));
+    const maxEnd = new Date(Math.max(...groupEvents.map(e => new Date(e.end).getTime())));
+    
+    // 그룹 대표 ID 생성 (첫 번째 이벤트 ID + 시작시간)
+    const firstEvent = groupEvents[0];
+    const groupId = `group-${firstEvent.id}-${minStart.toISOString()}`;
+
+    result.push({
+      id: groupId,
+      title: `${groupEvents.length}개의 수업`,
+      start: minStart.toISOString(),
+      end: maxEnd.toISOString(),
+      backgroundColor: '#4F46E5', // 그룹 색상 (Indigo)
+      borderColor: '#4338CA',
+      textColor: '#FFFFFF',
+      isGroup: true,
+      subEvents: groupEvents, // 원본 이벤트들 포함
+      extendedProps: {
+        isRecurring: true,
+      }
+    });
+  }
 };
