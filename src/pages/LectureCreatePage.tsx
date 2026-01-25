@@ -5,7 +5,11 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createLecture, CreateLectureRequest } from '../api/lectureApi';
 import { getInstructors } from '../api/adminApi';
+import { getStudents } from '../api/studentApi';
 import { useAuthStore } from '../stores/authStore';
+import { useState } from 'react';
+import clsx from 'clsx';
+import StudentQuickRegisterModal from '../components/StudentQuickRegisterModal';
 
 // 요일 옵션
 const DAY_OPTIONS = [
@@ -26,12 +30,13 @@ const lectureSchema = z.object({
   }),
   defaultPrice: z.number().min(0, '가격은 0원 이상이어야 합니다.'),
   defaultDuration: z.number().min(10, '수업 시간은 최소 10분 이상이어야 합니다.'),
-  instructorId: z.union([z.number(), z.string()]).optional(), // 숫자 또는 문자열(빈값) 허용
+  instructorId: z.union([z.number(), z.string()]).optional(),
   schedules: z.array(z.object({
     dayOfWeek: z.string().min(1, '요일을 선택해주세요.'),
     startTime: z.string().regex(/^\d{2}:\d{2}$/, '시간 형식이 올바르지 않습니다.'),
     endTime: z.string().regex(/^\d{2}:\d{2}$/, '시간 형식이 올바르지 않습니다.'),
   })).min(1, '최소 1개 이상의 시간표를 등록해야 합니다.'),
+  studentIds: z.array(z.number()).optional(),
 });
 
 type LectureFormData = z.infer<typeof lectureSchema>;
@@ -42,10 +47,18 @@ const LectureCreatePage = () => {
   const { user } = useAuthStore();
   const isOwner = user?.role === 'ROLE_OWNER';
 
+  const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
+  const [isQuickRegisterModalOpen, setIsQuickRegisterModalOpen] = useState(false);
+
   const { data: instructors } = useQuery({
     queryKey: ['instructors'],
     queryFn: getInstructors,
     enabled: isOwner,
+  });
+
+  const { data: students } = useQuery({
+    queryKey: ['students'],
+    queryFn: getStudents,
   });
 
   const {
@@ -54,16 +67,20 @@ const LectureCreatePage = () => {
     handleSubmit,
     setValue,
     getValues,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<LectureFormData>({
     resolver: zodResolver(lectureSchema),
     defaultValues: {
       type: 'BOARD',
-      defaultPrice: 50000, // 기본값 5만원
-      defaultDuration: 60, // 기본값 60분
+      defaultPrice: 50000,
+      defaultDuration: 60,
       schedules: [{ dayOfWeek: 'MONDAY', startTime: '14:00', endTime: '16:00' }],
+      studentIds: [],
     },
   });
+
+  const lectureType = watch('type');
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -84,16 +101,12 @@ const LectureCreatePage = () => {
   });
 
   const onSubmit = (data: LectureFormData) => {
-    console.log('Form Submitted:', data);
-
-    // 시간 형식 변환 (HH:mm -> HH:mm:ss)
     const formattedSchedules = data.schedules.map(s => ({
       ...s,
       startTime: s.startTime.length === 5 ? `${s.startTime}:00` : s.startTime,
       endTime: s.endTime.length === 5 ? `${s.endTime}:00` : s.endTime,
     }));
 
-    // instructorId 처리: 빈 문자열이나 0이면 undefined로 보냄 (백엔드가 본인으로 처리)
     let finalInstructorId: number | undefined = undefined;
     if (isOwner && data.instructorId) {
       const parsedId = Number(data.instructorId);
@@ -109,28 +122,38 @@ const LectureCreatePage = () => {
       defaultDuration: data.defaultDuration,
       instructorId: finalInstructorId,
       schedules: formattedSchedules,
+      studentIds: selectedStudentIds,
     };
     
-    console.log('Request Data:', requestData);
     mutation.mutate(requestData);
   };
 
-  // 유효성 검사 실패 시 호출되는 함수
   const onError = (errors: any) => {
     console.error('Validation Errors:', errors);
     alert('입력 정보를 확인해주세요.');
   };
 
-  // 가격 조절 핸들러
   const adjustPrice = (amount: number) => {
     const current = getValues('defaultPrice');
     setValue('defaultPrice', Math.max(0, current + amount));
   };
 
-  // 시간 조절 핸들러
   const adjustDuration = (amount: number) => {
     const current = getValues('defaultDuration');
     setValue('defaultDuration', Math.max(10, current + amount));
+  };
+
+  const toggleStudent = (studentId: number) => {
+    setSelectedStudentIds(prev => 
+      prev.includes(studentId) 
+        ? prev.filter(id => id !== studentId)
+        : [...prev, studentId]
+    );
+  };
+
+  const handleQuickRegisterSuccess = async (studentId: number) => {
+    await queryClient.invalidateQueries({ queryKey: ['students'] });
+    setSelectedStudentIds(prev => [...prev, studentId]);
   };
 
   return (
@@ -140,7 +163,6 @@ const LectureCreatePage = () => {
       <div className="bg-white shadow rounded-lg p-6">
         <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-8">
           
-          {/* 1. 기본 정보 섹션 */}
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-gray-900 border-b pb-2">기본 정보</h3>
             
@@ -184,7 +206,44 @@ const LectureCreatePage = () => {
               {errors.type && <p className="mt-1 text-sm text-red-600">{errors.type.message}</p>}
             </div>
 
-            {/* 가격 입력 */}
+            {lectureType === 'INDIV' && (
+              <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-blue-800">
+                    수강생 배정 (선택)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickRegisterModalOpen(true)}
+                    className="text-xs bg-white border border-blue-200 text-blue-600 px-2 py-1 rounded hover:bg-blue-50"
+                  >
+                    + 학생 간편 등록
+                  </button>
+                </div>
+                <div className="max-h-40 overflow-y-auto bg-white border border-gray-200 rounded-md p-2 space-y-1">
+                  {students?.map((student) => (
+                    <label key={student.id} className="flex items-center p-2 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedStudentIds.includes(student.id)}
+                        onChange={() => toggleStudent(student.id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">
+                        {student.name} ({student.school} {student.grade})
+                      </span>
+                    </label>
+                  ))}
+                  {students?.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-2">등록된 학생이 없습니다.</p>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-blue-600">
+                  * 선택한 학생들은 강의 생성과 동시에 수강생으로 등록됩니다.
+                </p>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 회차당 기본 단가 (원)
@@ -210,13 +269,11 @@ const LectureCreatePage = () => {
                   +1만
                 </button>
               </div>
-              {errors.defaultPrice && <p className="mt-1 text-sm text-red-600">{errors.defaultPrice.message}</p>}
             </div>
 
-            {/* 시간 입력 */}
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                기본 수업 시간 (분) <span className="text-gray-400 text-xs ml-1">(캘린더 자동 계산용)</span>
+                기본 수업 시간 (분)
               </label>
               <div className="mt-1 flex items-center gap-2">
                 <button
@@ -239,13 +296,12 @@ const LectureCreatePage = () => {
                   +30분
                 </button>
               </div>
-              {errors.defaultDuration && <p className="mt-1 text-sm text-red-600">{errors.defaultDuration.message}</p>}
             </div>
 
             {isOwner && (
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  담당 강사 <span className="text-gray-400 text-xs">(선택 시 해당 강사에게 배정)</span>
+                  담당 강사
                 </label>
                 <select
                   {...register('instructorId')}
@@ -253,7 +309,7 @@ const LectureCreatePage = () => {
                 >
                   <option value="">본인 (원장)</option>
                   {instructors?.map((instructor) => (
-                    <option key={instructor.memberId} value={instructor.memberId}>
+                    <option key={instructor.id} value={instructor.id}>
                       {instructor.name} ({instructor.email})
                     </option>
                   ))}
@@ -262,7 +318,6 @@ const LectureCreatePage = () => {
             )}
           </div>
 
-          {/* 2. 시간표 섹션 */}
           <div className="space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
               <h3 className="text-lg font-medium text-gray-900">정규 시간표</h3>
@@ -319,7 +374,6 @@ const LectureCreatePage = () => {
             {errors.schedules && <p className="text-sm text-red-600">{errors.schedules.message}</p>}
           </div>
 
-          {/* 버튼 그룹 */}
           <div className="flex justify-end gap-3 pt-4 border-t">
             <button
               type="button"
@@ -338,6 +392,13 @@ const LectureCreatePage = () => {
           </div>
         </form>
       </div>
+
+      {/* 간편 등록 모달 */}
+      <StudentQuickRegisterModal
+        isOpen={isQuickRegisterModalOpen}
+        onClose={() => setIsQuickRegisterModalOpen(false)}
+        onSuccess={handleQuickRegisterSuccess}
+      />
     </div>
   );
 };

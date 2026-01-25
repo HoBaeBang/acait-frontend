@@ -9,6 +9,7 @@ import { GRADE_OPTIONS } from '../constants/grade';
 const quickStudentSchema = z.object({
   name: z.string().min(2, '이름은 2글자 이상이어야 합니다.'),
   grade: z.string().min(1, '학년을 선택해주세요.'),
+  birthDate: z.string().length(4, '생일은 4자리여야 합니다. (예: 0101)'), // 추가됨
   parentPhone: z.string().regex(/^010-\d{4}-\d{4}$/, '010-0000-0000 형식으로 입력해주세요.'),
 });
 
@@ -17,7 +18,7 @@ type QuickStudentFormData = z.infer<typeof quickStudentSchema>;
 interface StudentQuickRegisterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (studentId: number) => void; // 등록된 학생 ID 반환
+  onSuccess: (studentId: number) => void;
 }
 
 const StudentQuickRegisterModal: React.FC<StudentQuickRegisterModalProps> = ({ isOpen, onClose, onSuccess }) => {
@@ -49,37 +50,24 @@ const StudentQuickRegisterModal: React.FC<StudentQuickRegisterModalProps> = ({ i
 
   const mutation = useMutation({
     mutationFn: async (data: QuickStudentFormData) => {
-      // 필수 값 외에는 기본값 또는 빈 값으로 채워서 전송
       const requestData: StudentRequest = {
         ...data,
-        school: '',
-        birthDate: '',
+        school: '', // 학교는 선택 사항이므로 빈 값
         parentEmail: '',
         memo: '간편 등록됨',
       };
-      // createStudent가 void를 반환하므로, 백엔드 응답에서 ID를 받으려면 api/studentApi.ts 수정 필요
-      // 하지만 현재 createStudent는 void 반환.
-      // -> 해결책: createStudent를 수정하여 response.data를 반환하게 하거나,
-      //    여기서는 목록 갱신 후 가장 최근 학생을 찾거나 해야 함.
-      //    가장 좋은 건 createStudent가 생성된 객체를 반환하는 것.
-      return createStudent(requestData); 
+      return createStudent(requestData);
     },
-    onSuccess: async () => {
-      // 목록 갱신
+    onSuccess: async (newStudent) => {
       await queryClient.invalidateQueries({ queryKey: ['students'] });
-      
-      // 방금 등록한 학생 ID를 알아내야 함.
-      // createStudent가 ID를 반환하지 않는다면, 목록을 다시 조회해서 찾아야 함.
-      // (임시 방편: 목록의 맨 마지막 또는 이름/전화번호로 매칭)
-      // *가장 확실한 방법은 api/studentApi.ts의 createStudent가 응답을 반환하도록 수정하는 것*
-      
       alert('학생이 등록되었습니다.');
       reset();
+      onSuccess(newStudent.id);
       onClose();
-      // onSuccess 콜백은 api 수정 후 연결
     },
-    onError: () => {
-      alert('학생 등록에 실패했습니다.');
+    onError: (error: any) => {
+      console.error('Registration Error:', error);
+      alert('학생 등록에 실패했습니다. 입력 정보를 확인해주세요.');
     },
   });
 
@@ -112,6 +100,18 @@ const StudentQuickRegisterModal: React.FC<StudentQuickRegisterModalProps> = ({ i
                     placeholder="홍길동"
                   />
                   {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">생일 (4자리) *</label>
+                  <input
+                    type="text"
+                    {...register('birthDate')}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="0101"
+                    maxLength={4}
+                  />
+                  {errors.birthDate && <p className="text-red-500 text-xs mt-1">{errors.birthDate.message}</p>}
                 </div>
 
                 <div>
