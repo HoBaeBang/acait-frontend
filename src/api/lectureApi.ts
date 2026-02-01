@@ -1,4 +1,5 @@
 import { client } from './client';
+import { Student } from './studentApi';
 
 // 강의 정보 인터페이스
 export interface Lecture {
@@ -43,7 +44,9 @@ export interface LectureEvent {
     instructor?: string;
     isRecurring?: boolean;
     lectureId?: number;
-    originalId?: string; // 추가됨: 원본 스케줄 ID
+    originalId?: string;
+    lectureName?: string;
+    studentNames?: string[];
   };
 }
 
@@ -52,7 +55,7 @@ export interface UpdateScheduleRequest {
   endTime: string;
   targetDate: string;
   scope: 'INSTANCE' | 'SERIES';
-  newDate?: string; // 추가됨: 날짜 변경 시 사용
+  newDate?: string;
 }
 
 // 강의 목록 조회 (역할에 따라 분기)
@@ -76,15 +79,44 @@ export const createLecture = async (data: CreateLectureRequest): Promise<void> =
   await client.post('/lecture', data);
 };
 
-// 캘린더용 이벤트 조회
-export const getLectureEvents = async (start: string, end: string): Promise<LectureEvent[]> => {
-  const response = await client.get<LectureEvent[]>('/lecture/events', {
-    params: { start, end }
-  });
+// 캘린더용 이벤트 조회 (수정됨: viewAll 파라미터 추가)
+export const getLectureEvents = async (
+  start: string, 
+  end: string, 
+  instructorId?: number | null,
+  viewAll?: boolean // 추가됨
+): Promise<LectureEvent[]> => {
+  const params: any = { start, end };
+  
+  if (viewAll) {
+    params.viewAll = true;
+  } else if (instructorId) {
+    params.instructorId = instructorId;
+  }
+  // 둘 다 없으면 기본적으로 본인 일정 조회 (파라미터 없음)
+  
+  console.log('Fetching Events with params:', params);
+
+  const response = await client.get<LectureEvent[]>('/lecture/events', { params });
   return response.data;
 };
 
 // 일정 수정
 export const updateSchedule = async (id: string, data: UpdateScheduleRequest): Promise<void> => {
   await client.put(`/schedules/${id}`, data);
+};
+
+// 강의별 수강생 목록 조회
+export const getLectureStudents = async (lectureId: number): Promise<Student[]> => {
+  const response = await client.get<any[]>(`/lecture/${lectureId}/students`);
+  return response.data.map((item) => ({
+    id: item.id,
+    studentNumber: item.studentNumber,
+    name: item.name,
+    school: item.school,
+    grade: item.grade,
+    parentPhone: item.parentPhone,
+    status: item.status,
+    createdAt: item.createdAt,
+  }));
 };

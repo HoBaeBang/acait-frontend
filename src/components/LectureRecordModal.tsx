@@ -7,18 +7,20 @@ interface LectureRecordModalProps {
   isOpen: boolean;
   onClose: () => void;
   lectureId: number;
+  lectureName?: string; // 추가됨
   studentId: number;
   studentName: string;
   date: string;
   startTime: string;
   endTime: string;
-  onEditSchedule?: () => void; // 일정 변경 핸들러 추가
+  onEditSchedule?: () => void;
 }
 
 const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
   isOpen,
   onClose,
   lectureId,
+  lectureName,
   studentId,
   studentName,
   date,
@@ -71,7 +73,7 @@ const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
             <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
-                  수업 기록 ({studentName})
+                  수업 기록 ({lectureName || '강의'} - {studentName})
                 </h3>
                 {onEditSchedule && (
                   <button

@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin, { EventDropArg, EventClickArg, DateClickArg } from '@fullcalendar/interaction';
 import { getLectureEvents, updateSchedule, UpdateScheduleRequest, LectureEvent } from '../api/lectureApi';
+import { getInstructors } from '../api/adminApi';
 import { useAuthStore } from '../stores/authStore';
 import { Link } from 'react-router-dom';
 import logo from '../assets/acait_logo.png';
@@ -49,8 +50,17 @@ const HomePage = () => {
 const CalendarView = () => {
   const queryClient = useQueryClient();
   const calendarRef = useRef<FullCalendar>(null);
+  const { user } = useAuthStore();
+  const isOwner = user?.role === 'ROLE_OWNER';
   
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  // null: 내 일정(기본), 'ALL': 전체 보기, number: 특정 강사
+  const [selectedInstructorId, setSelectedInstructorId] = useState<number | 'ALL' | null>(null);
+
+  // 디버깅 로그
+  useEffect(() => {
+    console.log('Selected Instructor ID:', selectedInstructorId);
+  }, [selectedInstructorId]);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isChangeModalOpen, setIsChangeModalOpen] = useState(false);
@@ -74,6 +84,7 @@ const CalendarView = () => {
   const [recordModalData, setRecordModalData] = useState<{
     isOpen: boolean;
     lectureId: number;
+    lectureName?: string;
     studentId: number;
     studentName: string;
     date: string;
@@ -108,9 +119,19 @@ const CalendarView = () => {
     subEvents: [],
   });
 
+  const { data: instructors } = useQuery({
+    queryKey: ['instructors'],
+    queryFn: getInstructors,
+    enabled: isOwner,
+  });
+
   const { data: rawEvents = [], isLoading } = useQuery({
-    queryKey: ['lectureEvents', dateRange.start, dateRange.end],
-    queryFn: () => getLectureEvents(dateRange.start, dateRange.end),
+    queryKey: ['lectureEvents', dateRange.start, dateRange.end, selectedInstructorId],
+    queryFn: () => {
+      const instructorId = typeof selectedInstructorId === 'number' ? selectedInstructorId : null;
+      const viewAll = selectedInstructorId === 'ALL';
+      return getLectureEvents(dateRange.start, dateRange.end, instructorId, viewAll);
+    },
     enabled: !!dateRange.start && !!dateRange.end,
   });
 
@@ -156,14 +177,6 @@ const CalendarView = () => {
       targetIds = [originalId];
     }
 
-    console.log('Dropping Event:', {
-      event,
-      oldEvent,
-      targetIds,
-      newStart: event.start,
-      originalStart: oldEvent.start
-    });
-
     setPendingUpdate({
       ids: targetIds,
       start: event.start!,
@@ -177,9 +190,7 @@ const CalendarView = () => {
   const handleConfirmUpdate = (scope: 'INSTANCE' | 'SERIES') => {
     if (!pendingUpdate) return;
     
-    // Timezone 문제 해결을 위한 날짜 포맷팅 함수
     const formatDate = (date: Date) => {
-      // 로컬 시간 기준으로 YYYY-MM-DD 반환
       const offset = date.getTimezoneOffset() * 60000;
       const localDate = new Date(date.getTime() - offset);
       return localDate.toISOString().slice(0, 10);
@@ -194,8 +205,6 @@ const CalendarView = () => {
       scope,
       newDate: formatDate(pendingUpdate.start),
     };
-
-    console.log('Updating Schedule:', { ids: pendingUpdate.ids, req: requestData });
 
     updateMutation.mutate({ ids: pendingUpdate.ids, req: requestData });
   };
@@ -229,28 +238,35 @@ const CalendarView = () => {
   const handleGroupItemEdit = (event: LectureEvent) => {
     setGroupDetailData(prev => ({ ...prev, isOpen: false }));
     
+    const startStr = typeof event.start === 'string' ? event.start : (event.start as Date).toISOString();
+    const endStr = typeof event.end === 'string' ? event.end : (event.end as Date).toISOString();
+    
     setRecordModalData({
       isOpen: true,
       lectureId: parseInt(event.extendedProps?.lectureId?.toString() || '0'),
+      lectureName: event.extendedProps?.lectureName || event.title,
       studentId: 1, 
-      studentName: '홍길동',
-      date: event.start.toString().slice(0, 10),
-      startTime: event.start.toString().slice(11, 16),
-      endTime: event.end.toString().slice(11, 16),
+      studentName: event.extendedProps?.studentNames?.join(', ') || '학생',
+      date: startStr.slice(0, 10),
+      startTime: startStr.slice(11, 16),
+      endTime: endStr.slice(11, 16),
       originalEventId: event.extendedProps?.originalId || event.id,
     });
   };
 
   const openRecordModal = (event: any) => {
+    const extendedProps = event.extendedProps || {};
+    
     setRecordModalData({
       isOpen: true,
-      lectureId: parseInt(event.extendedProps?.lectureId || 0),
+      lectureId: parseInt(extendedProps.lectureId || 0),
+      lectureName: extendedProps.lectureName || event.title,
       studentId: 1, 
-      studentName: '홍길동',
+      studentName: extendedProps.studentNames?.join(', ') || '학생',
       date: event.start!.toISOString().slice(0, 10),
       startTime: event.start!.toTimeString().slice(0, 5),
       endTime: event.end!.toTimeString().slice(0, 5),
-      originalEventId: event.extendedProps?.originalId || event.id,
+      originalEventId: extendedProps.originalId || event.id,
     });
   };
 
@@ -322,12 +338,36 @@ const CalendarView = () => {
         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
           <span className="text-blue-500">📅</span> 강의 일정
         </h1>
-        <Link 
-          to="/lectures/new" 
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
-        >
-          + 일정 등록
-        </Link>
+        
+        <div className="flex items-center gap-4">
+          {isOwner && (
+            <select
+              value={selectedInstructorId === null ? '' : selectedInstructorId}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') setSelectedInstructorId(null); // 내 일정
+                else if (val === 'ALL') setSelectedInstructorId('ALL'); // 전체 보기
+                else setSelectedInstructorId(Number(val)); // 특정 강사
+              }}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
+            >
+              <option value="">내 일정 보기 (원장)</option>
+              <option value="ALL">전체 강사 보기</option>
+              {instructors?.map((instructor) => (
+                <option key={instructor.id} value={instructor.id}>
+                  {instructor.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <Link 
+            to="/lectures/new" 
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+          >
+            + 일정 등록
+          </Link>
+        </div>
       </div>
       
       <ScheduleEditModal 
@@ -340,6 +380,7 @@ const CalendarView = () => {
         isOpen={recordModalData.isOpen}
         onClose={() => setRecordModalData(prev => ({ ...prev, isOpen: false }))}
         lectureId={recordModalData.lectureId}
+        lectureName={recordModalData.lectureName}
         studentId={recordModalData.studentId}
         studentName={recordModalData.studentName}
         date={recordModalData.date}

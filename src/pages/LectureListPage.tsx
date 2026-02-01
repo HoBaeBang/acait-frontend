@@ -1,16 +1,22 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { getLectures } from '../api/lectureApi';
 import { useAuthStore } from '../stores/authStore';
 import clsx from 'clsx';
+import LectureStudentManagementModal from '../components/LectureStudentManagementModal';
 
 const LectureListPage = () => {
   const { user } = useAuthStore();
+  const [selectedLecture, setSelectedLecture] = useState<{ id: number; name: string } | null>(null);
   
   const { data: lectures, isLoading, isError } = useQuery({
     queryKey: ['lectures', user?.role],
     queryFn: () => getLectures(user?.role),
   });
+
+  // 디버깅 로그 추가
+  console.log('Lectures Data:', lectures);
 
   if (isLoading) return <div className="p-8 text-center">로딩 중...</div>;
   if (isError) return <div className="p-8 text-center text-red-500">데이터를 불러오는데 실패했습니다.</div>;
@@ -59,8 +65,18 @@ const LectureListPage = () => {
                   {lecture.defaultDuration}분 / {lecture.defaultPrice.toLocaleString()}원
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                  <button className="text-blue-600 hover:text-blue-900">수정</button>
-                  <button className="text-gray-600 hover:text-gray-900">수강생 관리</button>
+                  <button 
+                    className="text-blue-600 hover:text-blue-900"
+                    onClick={() => alert('강의 수정 기능은 준비 중입니다.')}
+                  >
+                    수정
+                  </button>
+                  <button 
+                    className="text-gray-600 hover:text-gray-900"
+                    onClick={() => setSelectedLecture({ id: lecture.lectureId, name: lecture.name })}
+                  >
+                    수강생 관리
+                  </button>
                 </td>
               </tr>
             ))}
@@ -70,6 +86,16 @@ const LectureListPage = () => {
           <div className="text-center py-12 text-gray-500">개설된 강의가 없습니다.</div>
         )}
       </div>
+
+      {/* 수강생 관리 모달 */}
+      {selectedLecture && (
+        <LectureStudentManagementModal
+          isOpen={!!selectedLecture}
+          onClose={() => setSelectedLecture(null)}
+          lectureId={selectedLecture.id}
+          lectureName={selectedLecture.name}
+        />
+      )}
     </div>
   );
 };
