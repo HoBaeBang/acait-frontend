@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getSettlementDashboard, getSettlementDetails, downloadSettlementExcel, getSettlementForecast } from '../api/settlementApi';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getSettlementDashboard, getSettlementDetails, downloadSettlementExcel, getSettlementForecast, calculateSettlement } from '../api/settlementApi';
 import { useAuthStore } from '../stores/authStore';
 import clsx from 'clsx';
 
 const SettlementPage = () => {
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
   const today = new Date();
   const currentYearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   
@@ -17,16 +18,28 @@ const SettlementPage = () => {
     queryFn: () => getSettlementDashboard(yearMonth, user?.role),
   });
 
+  // 원장도 본인 강의 예상 수익을 볼 수 있도록 조건 수정
   const { data: forecast } = useQuery({
     queryKey: ['settlementForecast', yearMonth],
     queryFn: () => getSettlementForecast(yearMonth),
-    enabled: user?.role === 'ROLE_INSTRUCTOR' && yearMonth === currentYearMonth,
+    enabled: (user?.role === 'ROLE_INSTRUCTOR' || user?.role === 'ROLE_OWNER') && yearMonth === currentYearMonth,
   });
 
   const { data: details, isLoading: isDetailLoading } = useQuery({
     queryKey: ['settlementDetail', selectedSettlementId],
     queryFn: () => getSettlementDetails(selectedSettlementId!),
     enabled: !!selectedSettlementId,
+  });
+
+  const calculateMutation = useMutation({
+    mutationFn: calculateSettlement,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settlement'] });
+      alert(`${yearMonth} 정산이 완료되었습니다.`);
+    },
+    onError: () => {
+      alert('정산 실행에 실패했습니다.');
+    },
   });
 
   const totalSummary = summaries?.reduce((acc, curr) => ({
@@ -40,6 +53,12 @@ const SettlementPage = () => {
       await downloadSettlementExcel(yearMonth);
     } catch (error) {
       alert('엑셀 다운로드에 실패했습니다.');
+    }
+  };
+
+  const handleCalculate = () => {
+    if (window.confirm(`${yearMonth} 정산을 실행하시겠습니까?\n기존 정산 데이터가 있다면 덮어씌워집니다.`)) {
+      calculateMutation.mutate(yearMonth);
     }
   };
 
@@ -64,6 +83,17 @@ const SettlementPage = () => {
               className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
+          
+          {user?.role === 'ROLE_OWNER' && (
+            <button
+              onClick={handleCalculate}
+              disabled={calculateMutation.isPending}
+              className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center gap-2 disabled:bg-blue-400"
+            >
+              {calculateMutation.isPending ? '계산 중...' : '💰 정산 실행'}
+            </button>
+          )}
+
           <button
             onClick={handleDownloadExcel}
             className="bg-green-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700 flex items-center gap-2"
@@ -73,9 +103,46 @@ const SettlementPage = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {user?.role === 'ROLE_INSTRUCTOR' && forecast ? (
-          <>
+      {/* 원장님 전용: 학원 전체 요약 */}
+      {user?.role === 'ROLE_OWNER' && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">학원 전체 현황</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-gray-500 truncate">총 매출 (세전)</dt>
+                <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                  {totalSummary?.totalAmount?.toLocaleString() ?? '0'}원
+                </dd>
+              </div>
+            </div>
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-gray-500 truncate">공제액 (3.3%)</dt>
+                <dd className="mt-1 text-3xl font-semibold text-red-600">
+                  - {totalSummary?.taxAmount?.toLocaleString() ?? '0'}원
+                </dd>
+              </div>
+            </div>
+            <div className="bg-blue-50 overflow-hidden shadow rounded-lg border border-blue-100">
+              <div className="px-4 py-5 sm:p-6">
+                <dt className="text-sm font-medium text-blue-600 truncate">실지급액 합계</dt>
+                <dd className="mt-1 text-3xl font-bold text-blue-700">
+                  {totalSummary?.realAmount?.toLocaleString() ?? '0'}원
+                </dd>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 내 강의 예상 수익 (원장/강사 공통) */}
+      {forecast && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">
+            {user?.role === 'ROLE_OWNER' ? '내 강의 예상 수익' : '내 정산 현황'}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white overflow-hidden shadow rounded-lg">
               <div className="px-4 py-5 sm:p-6">
                 <dt className="text-sm font-medium text-gray-500 truncate">현재 확정 매출 (세전)</dt>
@@ -114,36 +181,9 @@ const SettlementPage = () => {
                 </div>
               </div>
             </div>
-          </>
-        ) : (
-          <>
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <dt className="text-sm font-medium text-gray-500 truncate">총 매출 (세전)</dt>
-                <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                  {totalSummary?.totalAmount?.toLocaleString() ?? '0'}원
-                </dd>
-              </div>
-            </div>
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <dt className="text-sm font-medium text-gray-500 truncate">공제액 (3.3%)</dt>
-                <dd className="mt-1 text-3xl font-semibold text-red-600">
-                  - {totalSummary?.taxAmount?.toLocaleString() ?? '0'}원
-                </dd>
-              </div>
-            </div>
-            <div className="bg-blue-50 overflow-hidden shadow rounded-lg border border-blue-100">
-              <div className="px-4 py-5 sm:p-6">
-                <dt className="text-sm font-medium text-blue-600 truncate">실지급액 합계</dt>
-                <dd className="mt-1 text-3xl font-bold text-blue-700">
-                  {totalSummary?.realAmount?.toLocaleString() ?? '0'}원
-                </dd>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 bg-white shadow rounded-lg overflow-hidden">
@@ -180,6 +220,11 @@ const SettlementPage = () => {
             {summaries?.length === 0 && (
               <li className="px-4 py-8 text-center text-gray-500 text-sm">
                 정산 데이터가 없습니다.
+                {user?.role === 'ROLE_OWNER' && (
+                  <p className="mt-2 text-xs text-blue-500">
+                    상단의 [정산 실행] 버튼을 눌러<br/>데이터를 생성해주세요.
+                  </p>
+                )}
               </li>
             )}
           </ul>

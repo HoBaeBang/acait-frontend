@@ -50,6 +50,13 @@ export const getSettlementDetails = async (settlementId: number): Promise<Settle
   return response.data;
 };
 
+// 정산 실행 (원장 전용)
+export const calculateSettlement = async (yearMonth: string): Promise<void> => {
+  await client.post('/settlements/calculate', null, {
+    params: { yearMonth },
+  });
+};
+
 // 엑셀 다운로드
 export const downloadSettlementExcel = async (yearMonth: string): Promise<void> => {
   const response = await client.get('/settlements/excel', {

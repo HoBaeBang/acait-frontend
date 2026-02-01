@@ -56,11 +56,10 @@ const StudentFormPage = () => {
   });
 
   // 수강 중인 강의 목록 조회 (수정 모드일 때만)
-  // studentId(숫자) 변환 제거 -> id(문자열) 그대로 사용
   const { data: enrolledLectures } = useQuery({
     queryKey: ['studentLectures', id],
     queryFn: () => getStudentLectures(id!),
-    enabled: isEditMode && !!id, // id가 있을 때만 실행
+    enabled: isEditMode && !!id,
   });
 
   useEffect(() => {
@@ -95,14 +94,14 @@ const StudentFormPage = () => {
     },
   });
 
-  // 수강 신청 뮤테이션 (studentData.id 사용)
+  // 수강 신청 뮤테이션 (수정됨: studentNumber 사용)
   const enrollMutation = useMutation({
     mutationFn: (lectureId: number) => {
-      // 백엔드가 studentId(PK)를 요구한다면 studentData.id를 써야 함
-      // 백엔드가 studentNumber를 요구한다면 id를 써야 함
-      // 여기서는 studentData.id (PK)를 우선 사용 (안전)
-      const targetId = studentData?.id || Number(id); 
-      return enrollStudent(lectureId, String(targetId));
+      // 백엔드는 studentNumber(학번)를 요구함
+      // studentData가 있으면 studentData.studentNumber 사용, 없으면 URL 파라미터 id 사용
+      const targetStudentNumber = studentData?.studentNumber || id;
+      if (!targetStudentNumber) throw new Error('학생 정보를 찾을 수 없습니다.');
+      return enrollStudent(lectureId, targetStudentNumber);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['studentLectures', id] });
@@ -114,11 +113,12 @@ const StudentFormPage = () => {
     },
   });
 
-  // 수강 취소 뮤테이션
+  // 수강 취소 뮤테이션 (수정됨: studentNumber 사용)
   const removeMutation = useMutation({
     mutationFn: (lectureId: number) => {
-      const targetId = studentData?.id || Number(id);
-      return removeStudent(lectureId, String(targetId));
+      const targetStudentNumber = studentData?.studentNumber || id;
+      if (!targetStudentNumber) throw new Error('학생 정보를 찾을 수 없습니다.');
+      return removeStudent(lectureId, targetStudentNumber);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['studentLectures', id] });
