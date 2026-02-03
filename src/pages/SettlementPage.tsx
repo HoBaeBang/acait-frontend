@@ -57,7 +57,11 @@ const SettlementPage = () => {
   };
 
   const handleCalculate = () => {
-    if (window.confirm(`${yearMonth} 정산을 실행하시겠습니까?\n기존 정산 데이터가 있다면 덮어씌워집니다.`)) {
+    const message = user?.role === 'ROLE_OWNER' 
+      ? `${yearMonth} 전체 정산을 실행하시겠습니까?\n기존 정산 데이터가 있다면 덮어씌워집니다.`
+      : `${yearMonth} 내 정산을 실행하시겠습니까?\n기존 정산 데이터가 있다면 덮어씌워집니다.`;
+      
+    if (window.confirm(message)) {
       calculateMutation.mutate(yearMonth);
     }
   };
@@ -84,13 +88,14 @@ const SettlementPage = () => {
             />
           </div>
           
-          {user?.role === 'ROLE_OWNER' && (
+          {/* 정산 실행 버튼 (원장/강사 모두 가능) */}
+          {(user?.role === 'ROLE_OWNER' || user?.role === 'ROLE_INSTRUCTOR') && (
             <button
               onClick={handleCalculate}
               disabled={calculateMutation.isPending}
               className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex items-center gap-2 disabled:bg-blue-400"
             >
-              {calculateMutation.isPending ? '계산 중...' : '💰 정산 실행'}
+              {calculateMutation.isPending ? '계산 중...' : (user?.role === 'ROLE_OWNER' ? '💰 전체 정산 실행' : '💰 내 정산 실행')}
             </button>
           )}
 
@@ -220,11 +225,9 @@ const SettlementPage = () => {
             {summaries?.length === 0 && (
               <li className="px-4 py-8 text-center text-gray-500 text-sm">
                 정산 데이터가 없습니다.
-                {user?.role === 'ROLE_OWNER' && (
-                  <p className="mt-2 text-xs text-blue-500">
-                    상단의 [정산 실행] 버튼을 눌러<br/>데이터를 생성해주세요.
-                  </p>
-                )}
+                <p className="mt-2 text-xs text-blue-500">
+                  상단의 [정산 실행] 버튼을 눌러<br/>데이터를 생성해주세요.
+                </p>
               </li>
             )}
           </ul>
