@@ -7,7 +7,8 @@ interface JwtPayload {
   sub: string;
   auth: 'ROLE_OWNER' | 'ROLE_INSTRUCTOR' | 'ROLE_SUPER_ADMIN' | 'ROLE_ADMIN';
   academyId?: number; 
-  memberId?: number; // 추가됨: 백엔드에서 memberId 클레임 제공 필요
+  memberId?: number;
+  name?: string; // 추가됨: 사용자 이름
   exp: number;
 }
 
@@ -15,8 +16,9 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   user: {
-    id: number | null; // 추가됨
+    id: number | null;
     email: string;
+    name: string; // 추가됨
     role: 'ROLE_OWNER' | 'ROLE_INSTRUCTOR' | 'ROLE_SUPER_ADMIN' | 'ROLE_ADMIN' | null;
     academyId: number | null;
   } | null;
@@ -41,8 +43,9 @@ export const useAuthStore = create<AuthState>()(
             token, 
             isAuthenticated: true,
             user: {
-              id: decoded.memberId || null, // memberId 매핑
+              id: decoded.memberId || null,
               email: decoded.sub,
+              name: decoded.name || decoded.sub.split('@')[0], // 이름이 없으면 이메일 앞부분 사용
               role: decoded.auth, 
               academyId: decoded.academyId || null
             }
@@ -65,10 +68,9 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
-      version: 2, // 구조 변경으로 버전 업 (1 -> 2)
+      version: 3, // 구조 변경으로 버전 업 (2 -> 3)
       migrate: (persistedState: any, version: number) => {
-        if (version < 2) {
-          // 이전 버전 데이터는 호환되지 않으므로 초기화
+        if (version < 3) {
           return { token: null, isAuthenticated: false, user: null };
         }
         return persistedState as AuthState;

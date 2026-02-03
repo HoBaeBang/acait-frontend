@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createRecord, LectureRecordRequest } from '../api/recordApi';
@@ -7,7 +7,7 @@ interface LectureRecordModalProps {
   isOpen: boolean;
   onClose: () => void;
   lectureId: number;
-  lectureName?: string; // 추가됨
+  lectureName?: string;
   studentId: number;
   studentName: string;
   date: string;
@@ -37,6 +37,18 @@ const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
       actualEndTime: endTime,
     }
   });
+
+  // 모달이 열릴 때마다 폼 값을 초기화 (props 변경 반영)
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        attendanceStatus: 'ATTENDED',
+        actualStartTime: startTime,
+        actualEndTime: endTime,
+        dailyLog: '', // 일지도 초기화
+      });
+    }
+  }, [isOpen, startTime, endTime, reset]);
 
   const mutation = useMutation({
     mutationFn: createRecord,
