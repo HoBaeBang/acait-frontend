@@ -115,11 +115,15 @@ const LectureRecordModal: React.FC<LectureRecordModalProps> = ({
                     </label>
                     <label className="flex items-center">
                       <input type="radio" value="ABSENT" {...register('attendanceStatus')} className="h-4 w-4 text-red-600" />
-                      <span className="ml-2 text-sm text-gray-700">결석</span>
+                      <span className="ml-2 text-sm text-gray-700">당일 통보 결석</span>
                     </label>
                     <label className="flex items-center">
                       <input type="radio" value="REQ_MAKEUP" {...register('attendanceStatus')} className="h-4 w-4 text-purple-600" />
-                      <span className="ml-2 text-sm text-gray-700 font-bold text-purple-700">보강 필요</span>
+                      <span className="ml-2 text-sm text-gray-700 font-bold text-purple-700">사전 협의 결석</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input type="radio" value="CANCELLED" {...register('attendanceStatus')} className="h-4 w-4 text-gray-600" />
+                      <span className="ml-2 text-sm text-gray-700">휴강</span>
                     </label>
                   </div>
                 </div>

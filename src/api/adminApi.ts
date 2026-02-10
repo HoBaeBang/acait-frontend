@@ -1,9 +1,9 @@
 import { client } from './client';
 
 export interface Instructor {
-  id: number; // memberId -> id로 수정 (백엔드 MemberResponse 일치)
+  id: number;
   name: string;
-  email: string; // googleEmail 또는 contactEmail 매핑 필요 (아래 getInstructors에서 처리)
+  email: string;
   phone: string;
   role: string;
   status: 'PENDING' | 'ACTIVE' | 'REJECTED';
@@ -12,12 +12,11 @@ export interface Instructor {
 
 // 강사 목록 조회
 export const getInstructors = async (): Promise<Instructor[]> => {
-  const response = await client.get<any[]>('/instructors');
-  // 백엔드 응답(MemberResponse)을 프론트엔드 모델(Instructor)로 매핑
+  const response = await client.get<any[]>('/admin/instructors'); // 경로 수정
   return response.data.map((item) => ({
     id: item.id,
     name: item.name,
-    email: item.contactEmail || item.googleEmail, // 연락처 이메일 우선
+    email: item.contactEmail || item.googleEmail,
     phone: item.phone,
     role: item.role,
     status: item.status,
@@ -27,5 +26,10 @@ export const getInstructors = async (): Promise<Instructor[]> => {
 
 // 강사 승인
 export const approveInstructor = async (id: number): Promise<void> => {
-  await client.put(`/instructors/${id}/approve`);
+  await client.put(`/admin/instructors/${id}/approve`); // 경로 수정
+};
+
+// 역할 변경 (추가됨)
+export const updateMemberRole = async (id: number, role: string): Promise<void> => {
+  await client.put(`/admin/members/${id}/role`, { role });
 };

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getInstructors, approveInstructor } from '../../api/adminApi';
+import { getInstructors, approveInstructor, updateMemberRole } from '../../api/adminApi';
 import clsx from 'clsx';
 import PlanLimitModal from '../../components/PlanLimitModal';
 
@@ -28,15 +28,34 @@ const InstructorPage = () => {
     },
   });
 
+  const roleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: number, role: string }) => updateMemberRole(id, role),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['instructors'] });
+      alert('역할이 변경되었습니다.');
+    },
+    onError: () => {
+      alert('역할 변경에 실패했습니다.');
+    },
+  });
+
   const handleApprove = (id: number) => {
     if (window.confirm('해당 강사를 승인하시겠습니까?')) {
       approveMutation.mutate(id);
     }
   };
 
+  const handleRoleChange = (id: number, currentRole: string) => {
+    const newRole = currentRole === 'ROLE_INSTRUCTOR' ? 'ROLE_MANAGER' : 'ROLE_INSTRUCTOR';
+    if (window.confirm(`역할을 '${getRoleLabel(newRole)}'(으)로 변경하시겠습니까?`)) {
+      roleMutation.mutate({ id, role: newRole });
+    }
+  };
+
   const getRoleLabel = (role: string) => {
     switch (role) {
       case 'ROLE_OWNER': return '원장';
+      case 'ROLE_MANAGER': return '실장';
       case 'ROLE_INSTRUCTOR': return '강사';
       default: return role;
     }
@@ -47,7 +66,7 @@ const InstructorPage = () => {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">강사 관리 (승인)</h1>
+      <h1 className="text-2xl font-bold mb-6 text-gray-800">강사/실장 관리</h1>
 
       <PlanLimitModal 
         isOpen={isLimitModalOpen} 
@@ -59,10 +78,10 @@ const InstructorPage = () => {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이름</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">역할</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">연락처</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이메일</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">가입일</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">관리</th>
             </tr>
           </thead>
@@ -71,7 +90,16 @@ const InstructorPage = () => {
               <tr key={instructor.id}>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{instructor.name}</div>
-                  <div className="text-xs text-gray-500">{getRoleLabel(instructor.role)}</div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={clsx(
+                    "px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer",
+                    instructor.role === 'ROLE_MANAGER' ? "bg-purple-100 text-purple-800" : "bg-gray-100 text-gray-800"
+                  )}
+                  onClick={() => handleRoleChange(instructor.id, instructor.role)}
+                  >
+                    {getRoleLabel(instructor.role)}
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {instructor.phone}
@@ -89,9 +117,6 @@ const InstructorPage = () => {
                     {instructor.status === 'ACTIVE' ? '승인됨' : 
                      instructor.status === 'PENDING' ? '승인 대기' : '거절됨'}
                   </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(instructor.createdAt).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   {instructor.status === 'PENDING' && (
