@@ -23,7 +23,17 @@ const MainLayout = () => {
 
   if (user?.role === 'ROLE_OWNER') {
     menuItems.push({ path: '/admin/instructors', label: '강사 승인' });
+    menuItems.push({ path: '/admin/settings', label: '학원 설정' }); // 추가됨
   }
+
+  const getRoleLabel = (role?: string) => {
+    switch (role) {
+      case 'ROLE_OWNER': return '원장';
+      case 'ROLE_MANAGER': return '실장';
+      case 'ROLE_INSTRUCTOR': return '강사';
+      default: return '게스트';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -56,8 +66,13 @@ const MainLayout = () => {
               <div className="ml-3 relative flex items-center gap-4">
                 <div className="text-sm text-right flex items-center gap-2">
                   <span className="font-medium text-gray-900">{user?.name}</span>
-                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
-                    {user?.role === 'ROLE_OWNER' ? '원장' : '강사'}
+                  <span className={clsx(
+                    "text-xs px-2 py-0.5 rounded-full",
+                    user?.role === 'ROLE_OWNER' ? "bg-blue-100 text-blue-800" :
+                    user?.role === 'ROLE_MANAGER' ? "bg-purple-100 text-purple-800" :
+                    "bg-gray-100 text-gray-800"
+                  )}>
+                    {getRoleLabel(user?.role)}
                   </span>
                 </div>
                 <button

@@ -13,6 +13,7 @@ import StudentListPage from './pages/students/StudentListPage';
 import StudentFormPage from './pages/students/StudentFormPage';
 import SettlementPage from './pages/SettlementPage';
 import MaterialPage from './pages/MaterialPage';
+import AcademySettingsPage from './pages/AcademySettingsPage';
 
 function App() {
   return (
@@ -44,6 +45,7 @@ function App() {
           
           {/* 관리자 전용 라우트 */}
           <Route path="/admin/instructors" element={<InstructorPage />} />
+          <Route path="/admin/settings" element={<AcademySettingsPage />} />
         </Route>
 
         {/* 레이아웃 없이 보여줄 페이지들 */}

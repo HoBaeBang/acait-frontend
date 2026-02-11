@@ -27,6 +27,20 @@ export interface SettlementForecast {
   realAmount: number;      // 예상 실지급액 (세후)
 }
 
+// 공제 항목 DTO
+export interface DeductionItem {
+  id: number;
+  name: string;
+  type: 'PERCENT' | 'FIXED_AMOUNT';
+  value: number;
+}
+
+export interface DeductionItemRequest {
+  name: string;
+  type: 'PERCENT' | 'FIXED_AMOUNT';
+  value: number;
+}
+
 // 정산 대시보드 조회 (확정 금액)
 export const getSettlementDashboard = async (yearMonth: string, role?: string | null): Promise<SettlementSummary[]> => {
   const url = role === 'ROLE_OWNER' ? '/settlements/dashboard' : '/settlements/my';
@@ -71,4 +85,25 @@ export const downloadSettlementExcel = async (yearMonth: string): Promise<void> 
   document.body.appendChild(link);
   link.click();
   link.remove();
+};
+
+// --- 공제 항목 API ---
+
+export const getDeductionItems = async (): Promise<DeductionItem[]> => {
+  const response = await client.get<DeductionItem[]>('/academies/deductions');
+  return response.data;
+};
+
+export const createDeductionItem = async (data: DeductionItemRequest): Promise<DeductionItem> => {
+  const response = await client.post<DeductionItem>('/academies/deductions', data);
+  return response.data;
+};
+
+export const updateDeductionItem = async ({ id, data }: { id: number; data: DeductionItemRequest }): Promise<DeductionItem> => {
+  const response = await client.put<DeductionItem>(`/academies/deductions/${id}`, data);
+  return response.data;
+};
+
+export const deleteDeductionItem = async (id: number): Promise<void> => {
+  await client.delete(`/academies/deductions/${id}`);
 };

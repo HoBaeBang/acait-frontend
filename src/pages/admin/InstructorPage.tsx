@@ -32,7 +32,7 @@ const InstructorPage = () => {
     mutationFn: ({ id, role }: { id: number, role: string }) => updateMemberRole(id, role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instructors'] });
-      alert('역할이 변경되었습니다.');
+      // alert('역할이 변경되었습니다.'); // 드롭다운 변경 시 알림은 생략하거나 토스트로 대체 가능
     },
     onError: () => {
       alert('역할 변경에 실패했습니다.');
@@ -45,20 +45,8 @@ const InstructorPage = () => {
     }
   };
 
-  const handleRoleChange = (id: number, currentRole: string) => {
-    const newRole = currentRole === 'ROLE_INSTRUCTOR' ? 'ROLE_MANAGER' : 'ROLE_INSTRUCTOR';
-    if (window.confirm(`역할을 '${getRoleLabel(newRole)}'(으)로 변경하시겠습니까?`)) {
-      roleMutation.mutate({ id, role: newRole });
-    }
-  };
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case 'ROLE_OWNER': return '원장';
-      case 'ROLE_MANAGER': return '실장';
-      case 'ROLE_INSTRUCTOR': return '강사';
-      default: return role;
-    }
+  const handleRoleChange = (id: number, newRole: string) => {
+    roleMutation.mutate({ id, role: newRole });
   };
 
   if (isLoading) return <div className="p-8 text-center">로딩 중...</div>;
@@ -92,14 +80,23 @@ const InstructorPage = () => {
                   <div className="text-sm font-medium text-gray-900">{instructor.name}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={clsx(
-                    "px-2 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer",
-                    instructor.role === 'ROLE_MANAGER' ? "bg-purple-100 text-purple-800" : "bg-gray-100 text-gray-800"
+                  {instructor.role === 'ROLE_OWNER' ? (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                      원장
+                    </span>
+                  ) : (
+                    <select
+                      value={instructor.role}
+                      onChange={(e) => handleRoleChange(instructor.id, e.target.value)}
+                      className={clsx(
+                        "block w-full pl-3 pr-10 py-1 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md",
+                        instructor.role === 'ROLE_MANAGER' ? "bg-purple-50 text-purple-900" : "bg-white text-gray-900"
+                      )}
+                    >
+                      <option value="ROLE_INSTRUCTOR">강사</option>
+                      <option value="ROLE_MANAGER">실장</option>
+                    </select>
                   )}
-                  onClick={() => handleRoleChange(instructor.id, instructor.role)}
-                  >
-                    {getRoleLabel(instructor.role)}
-                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {instructor.phone}

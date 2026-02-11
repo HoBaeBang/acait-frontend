@@ -45,7 +45,9 @@ const LectureCreatePage = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const isOwner = user?.role === 'ROLE_OWNER';
+  
+  // 원장 또는 실장은 강사를 지정할 수 있음
+  const canAssignInstructor = user?.role === 'ROLE_OWNER' || user?.role === 'ROLE_MANAGER';
 
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [isQuickRegisterModalOpen, setIsQuickRegisterModalOpen] = useState(false);
@@ -53,7 +55,7 @@ const LectureCreatePage = () => {
   const { data: instructors } = useQuery({
     queryKey: ['instructors'],
     queryFn: getInstructors,
-    enabled: isOwner,
+    enabled: canAssignInstructor,
   });
 
   const { data: students } = useQuery({
@@ -108,7 +110,7 @@ const LectureCreatePage = () => {
     }));
 
     let finalInstructorId: number | undefined = undefined;
-    if (isOwner && data.instructorId) {
+    if (canAssignInstructor && data.instructorId) {
       const parsedId = Number(data.instructorId);
       if (!isNaN(parsedId) && parsedId > 0) {
         finalInstructorId = parsedId;
@@ -298,7 +300,7 @@ const LectureCreatePage = () => {
               </div>
             </div>
 
-            {isOwner && (
+            {canAssignInstructor && (
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   담당 강사
@@ -307,7 +309,7 @@ const LectureCreatePage = () => {
                   {...register('instructorId')}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                 >
-                  <option value="">본인 (원장)</option>
+                  <option value="">본인</option>
                   {instructors?.map((instructor) => (
                     <option key={instructor.id} value={instructor.id}>
                       {instructor.name} ({instructor.email})

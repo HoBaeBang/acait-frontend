@@ -51,7 +51,9 @@ const CalendarView = () => {
   const queryClient = useQueryClient();
   const calendarRef = useRef<FullCalendar>(null);
   const { user } = useAuthStore();
-  const isOwner = user?.role === 'ROLE_OWNER';
+  
+  // 원장 또는 실장은 전체 일정을 볼 수 있음
+  const canViewAllSchedules = user?.role === 'ROLE_OWNER' || user?.role === 'ROLE_MANAGER';
   
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   // null: 내 일정(기본), 'ALL': 전체 보기, number: 특정 강사
@@ -122,7 +124,7 @@ const CalendarView = () => {
   const { data: instructors } = useQuery({
     queryKey: ['instructors'],
     queryFn: getInstructors,
-    enabled: isOwner,
+    enabled: canViewAllSchedules,
   });
 
   const { data: rawEvents = [], isLoading } = useQuery({
@@ -340,7 +342,7 @@ const CalendarView = () => {
         </h1>
         
         <div className="flex items-center gap-4">
-          {isOwner && (
+          {canViewAllSchedules && (
             <select
               value={selectedInstructorId === null ? '' : selectedInstructorId}
               onChange={(e) => {
@@ -351,7 +353,7 @@ const CalendarView = () => {
               }}
               className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
             >
-              <option value="">내 일정 보기 (원장)</option>
+              <option value="">내 일정 보기</option>
               <option value="ALL">전체 강사 보기</option>
               {instructors?.map((instructor) => (
                 <option key={instructor.id} value={instructor.id}>
