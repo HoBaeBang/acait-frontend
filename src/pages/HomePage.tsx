@@ -7,8 +7,7 @@ import interactionPlugin, { EventDropArg, EventClickArg, DateClickArg } from '@f
 import { getLectureEvents, updateSchedule, UpdateScheduleRequest, LectureEvent } from '../api/lectureApi';
 import { getInstructors } from '../api/adminApi';
 import { useAuthStore } from '../stores/authStore';
-import { Link } from 'react-router-dom';
-import logo from '../assets/acait_logo.png';
+import { Link, Navigate } from 'react-router-dom';
 import ScheduleEditModal from '../components/ScheduleEditModal';
 import LectureRecordModal from '../components/LectureRecordModal';
 import MakeupScheduleModal from '../components/MakeupScheduleModal';
@@ -19,29 +18,9 @@ import { useGroupedEvents } from '../hooks/useGroupedEvents';
 const HomePage = () => {
   const { isAuthenticated } = useAuthStore();
 
+  // 로그인하지 않은 경우 로그인 페이지로 리다이렉트
   if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col min-h-[calc(100vh-4rem)]">
-        <section className="flex-1 flex flex-col items-center justify-center text-center px-4 py-20 bg-gradient-to-b from-blue-50 to-white">
-          <div className="max-w-4xl mx-auto">
-            <img src={logo} alt="ACAIT Logo" className="h-32 mx-auto mb-8 drop-shadow-md" />
-            <h1 className="text-5xl font-extrabold text-gray-900 mb-6 tracking-tight">
-              학원 관리를 <span className="text-blue-600">더 스마트하게</span>
-            </h1>
-            <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
-              복잡한 강의 일정부터 강사 관리까지, ACAIT 하나로 해결하세요.<br />
-              효율적인 학원 운영의 시작, 지금 바로 경험해보세요.
-            </p>
-            <Link
-              to="/login"
-              className="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-blue-600 rounded-full hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-            >
-              로그인하여 시작하기
-            </Link>
-          </div>
-        </section>
-      </div>
-    );
+    return <Navigate to="/login" replace />;
   }
 
   return <CalendarView />;

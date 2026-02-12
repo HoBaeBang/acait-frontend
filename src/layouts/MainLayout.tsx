@@ -14,7 +14,7 @@ const MainLayout = () => {
   };
 
   const menuItems = [
-    { path: '/', label: '홈' },
+    { path: '/schedule', label: '강의 일정' },
     { path: '/lectures', label: '강의 관리' },
     { path: '/students', label: '수강생 관리' },
     { path: '/materials', label: '교재 관리' },
@@ -23,7 +23,7 @@ const MainLayout = () => {
 
   if (user?.role === 'ROLE_OWNER') {
     menuItems.push({ path: '/admin/instructors', label: '강사 승인' });
-    menuItems.push({ path: '/admin/settings', label: '학원 설정' }); // 추가됨
+    menuItems.push({ path: '/admin/settings', label: '학원 설정' });
   }
 
   const getRoleLabel = (role?: string) => {
@@ -64,26 +64,37 @@ const MainLayout = () => {
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:items-center">
               <div className="ml-3 relative flex items-center gap-4">
-                <div className="text-sm text-right flex items-center gap-2">
-                  <span className="font-medium text-gray-900">{user?.name}</span>
-                  <span className={clsx(
-                    "text-xs px-2 py-0.5 rounded-full",
-                    user?.role === 'ROLE_OWNER' ? "bg-blue-100 text-blue-800" :
-                    user?.role === 'ROLE_MANAGER' ? "bg-purple-100 text-purple-800" :
-                    "bg-gray-100 text-gray-800"
-                  )}>
-                    {getRoleLabel(user?.role)}
-                  </span>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <span className="sr-only">로그아웃</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </button>
+                {user ? (
+                  <>
+                    <div className="text-sm text-right flex items-center gap-2">
+                      <span className="font-medium text-gray-900">{user.name}</span>
+                      <span className={clsx(
+                        "text-xs px-2 py-0.5 rounded-full",
+                        user.role === 'ROLE_OWNER' ? "bg-blue-100 text-blue-800" :
+                        user.role === 'ROLE_MANAGER' ? "bg-purple-100 text-purple-800" :
+                        "bg-gray-100 text-gray-800"
+                      )}>
+                        {getRoleLabel(user.role)}
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      <span className="sr-only">로그아웃</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    to="/login"
+                    className="text-sm font-medium text-gray-500 hover:text-gray-900"
+                  >
+                    로그인
+                  </Link>
+                )}
               </div>
             </div>
           </div>
