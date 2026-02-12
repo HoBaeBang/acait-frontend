@@ -10,6 +10,13 @@ export interface Instructor {
   createdAt: string;
 }
 
+export interface AcademyInfo {
+  id: number;
+  name: string;
+  inviteCode: string;
+  maxMembers: number;
+}
+
 // 강사 목록 조회
 export const getInstructors = async (): Promise<Instructor[]> => {
   const response = await client.get<any[]>('/admin/instructors'); // 경로 수정
@@ -32,4 +39,10 @@ export const approveInstructor = async (id: number): Promise<void> => {
 // 역할 변경 (추가됨)
 export const updateMemberRole = async (id: number, role: string): Promise<void> => {
   await client.put(`/admin/members/${id}/role`, { role });
+};
+
+// 내 학원 정보 조회 (추가됨)
+export const getMyAcademy = async (): Promise<AcademyInfo> => {
+  const response = await client.get<AcademyInfo>('/academies/my');
+  return response.data;
 };

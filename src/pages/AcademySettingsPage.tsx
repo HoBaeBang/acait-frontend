@@ -9,12 +9,19 @@ import {
   DeductionItem,
   DeductionItemRequest
 } from '../api/settlementApi';
+import { getMyAcademy } from '../api/adminApi';
 import clsx from 'clsx';
 
 const AcademySettingsPage = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<DeductionItem | null>(null);
+
+  // 학원 정보 조회
+  const { data: academyInfo } = useQuery({
+    queryKey: ['myAcademy'],
+    queryFn: getMyAcademy,
+  });
 
   // 공제 항목 목록 조회
   const { data: deductionItems, isLoading, isError } = useQuery({
@@ -75,27 +82,76 @@ const AcademySettingsPage = () => {
     setEditingItem(null);
   };
 
+  const copyInviteCode = () => {
+    if (academyInfo?.inviteCode) {
+      navigator.clipboard.writeText(academyInfo.inviteCode);
+      alert('초대 코드가 복사되었습니다.');
+    }
+  };
+
   if (isLoading) return <div className="p-8 text-center">로딩 중...</div>;
   if (isError) return <div className="p-8 text-center text-red-500">데이터를 불러오는데 실패했습니다.</div>;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+    <div className="p-6 max-w-4xl mx-auto space-y-8">
+      <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">학원 설정</h1>
-        <button
-          onClick={openCreateModal}
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          + 공제 항목 추가
-        </button>
       </div>
 
+      {/* 학원 정보 섹션 */}
       <div className="bg-white shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
         <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">정산 공제 항목 관리</h3>
+          <h3 className="text-lg leading-6 font-medium text-gray-900">기본 정보</h3>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">
-            강사 정산 시 차감될 항목(세금, 운영비 등)을 설정합니다.
+            학원 이름 및 강사 초대 코드를 확인합니다.
           </p>
+        </div>
+        <div className="px-4 py-5 sm:p-6">
+          <dl className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2">
+            <div className="sm:col-span-1">
+              <dt className="text-sm font-medium text-gray-500">학원명</dt>
+              <dd className="mt-1 text-sm text-gray-900">{academyInfo?.name}</dd>
+            </div>
+            <div className="sm:col-span-1">
+              <dt className="text-sm font-medium text-gray-500">최대 인원</dt>
+              <dd className="mt-1 text-sm text-gray-900">{academyInfo?.maxMembers}명</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-sm font-medium text-gray-500">강사 초대 코드</dt>
+              <dd className="mt-1 text-sm text-gray-900 flex items-center gap-2">
+                <span className="bg-gray-100 px-3 py-1 rounded font-mono text-lg tracking-wider">
+                  {academyInfo?.inviteCode}
+                </span>
+                <button
+                  onClick={copyInviteCode}
+                  className="text-blue-600 hover:text-blue-800 text-xs border border-blue-200 px-2 py-1 rounded hover:bg-blue-50"
+                >
+                  복사하기
+                </button>
+              </dd>
+              <p className="mt-2 text-xs text-gray-500">
+                * 강사 회원가입 시 이 코드를 입력해야 가입 신청이 가능합니다.
+              </p>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      {/* 공제 항목 관리 섹션 */}
+      <div className="bg-white shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
+        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg leading-6 font-medium text-gray-900">정산 공제 항목 관리</h3>
+            <p className="mt-1 max-w-2xl text-sm text-gray-500">
+              강사 정산 시 차감될 항목(세금, 운영비 등)을 설정합니다.
+            </p>
+          </div>
+          <button
+            onClick={openCreateModal}
+            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+          >
+            + 항목 추가
+          </button>
         </div>
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
